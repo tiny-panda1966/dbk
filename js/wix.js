@@ -41,26 +41,46 @@ export function mediaId(m) {
   return /~mv2|\.(jpe?g|png|webp)$/i.test(m) ? m : '';
 }
 
+// Wix SDK packages from esm.sh. Each is tried in order: a pinned, known-good version first, then latest.
+// Pinning means a broken upstream publish can't take the live site down; bump versions deliberately.
+const SDK_VERSIONS = {
+  sdk: ['@wix/sdk'],
+  stores: ['@wix/stores'],
+  ecom: ['@wix/ecom@1.0.2603', '@wix/ecom'],
+  redirects: ['@wix/redirects'],
+  data: ['@wix/data'],
+  members: ['@wix/members'],
+};
+export const sdkStatus = {};
+async function loadMod(name, required = false) {
+  let lastErr;
+  for (const spec of SDK_VERSIONS[name]) {
+    try { const m = await import('https://esm.sh/' + spec); sdkStatus[name] = spec; return m; }
+    catch (e) { lastErr = e; console.warn(`[DBK] Couldn't load ${spec}: ${e?.message || e}`); }
+  }
+  sdkStatus[name] = 'failed';
+  if (required) throw lastErr || new Error('Failed to load @wix/' + name);
+  return null;
+}
+
 async function getClient() {
   if (clientPromise) return clientPromise;
   clientPromise = (async () => {
     if (CONFIG.dataMode === 'fallback' || !CONFIG.clientId) return null;
     try {
-      const [{ createClient, OAuthStrategy }, stores, ecom, redir, data, mem] = await Promise.all([
-        import('https://esm.sh/@wix/sdk'), import('https://esm.sh/@wix/stores'),
-        import('https://esm.sh/@wix/ecom'), import('https://esm.sh/@wix/redirects'),
-        import('https://esm.sh/@wix/data').catch(() => null),
-        import('https://esm.sh/@wix/members').catch(() => null),
+      const [sdk, stores, ecom, redir, data, mem] = await Promise.all([
+        loadMod('sdk', true), loadMod('stores', true), loadMod('ecom'), loadMod('redirects'), loadMod('data'), loadMod('members'),
       ]);
+      const { createClient, OAuthStrategy } = sdk;
       let tokens = null; try { tokens = JSON.parse(localStorage.getItem(TOKENS_KEY) || 'null'); } catch (e) {}
       const c = createClient({
-        modules: { productsV3: stores.productsV3, readOnlyVariantsV3: stores.readOnlyVariantsV3, currentCart: ecom.currentCart, redirects: redir.redirects, ...(data?.items ? { items: data.items } : {}), ...(mem?.members ? { members: mem.members } : {}) },
+        modules: { productsV3: stores.productsV3, readOnlyVariantsV3: stores.readOnlyVariantsV3, ...(ecom?.currentCart ? { currentCart: ecom.currentCart } : {}), ...(redir?.redirects ? { redirects: redir.redirects } : {}), ...(data?.items ? { items: data.items } : {}), ...(mem?.members ? { members: mem.members } : {}) },
         auth: OAuthStrategy({ clientId: CONFIG.clientId, tokens: tokens || undefined }),
       });
       if (!tokens) localStorage.setItem(TOKENS_KEY, JSON.stringify(await c.auth.generateVisitorTokens()));
       return c;
     } catch (e) {
-      console.warn('[DBK] Wix Headless unavailable:', e);
+      console.warn('[DBK] Wix Headless unavailable:', e?.message || String(e), e);
       if (CONFIG.dataMode === 'live') throw e;
       return null;
     }
@@ -200,7 +220,7 @@ export async function getCart() {
 }
 async function rawCart() {
   const c = await getClient();
-  if (c && mode !== 'fallback') {
+  if (c && c.currentCart && mode !== 'fallback') {
     try {
       const cart = await c.currentCart.getCurrentCart(); saveTokens(c);
       return (cart.lineItems || []).map(li => ({
@@ -216,6 +236,7 @@ async function rawCart() {
 export async function addToCart(product, { choices = {}, texts = {}, qty = 1, unit, summary = [] }) {
   const c = await getClient();
   if (c && product.live) {
+    if (!c.currentCart) throw new Error('Cart is temporarily unavailable.');
     const options = { options: choices };
     if (product.variantId) options.variantId = product.variantId;
     const ct = Object.fromEntries(Object.entries(texts).filter(([, v]) => v && v.trim()));
@@ -251,6 +272,7 @@ export async function setQty(id, qty) {
 export async function checkout() {
   const c = await getClient();
   if (!c || mode !== 'live') throw new Error('Checkout opens once the store is connected to Wix. This preview is using the exported catalogue.');
+  if (!c.currentCart || !c.redirects) throw new Error('Checkout is temporarily unavailable. Please try again in a few minutes.');
   const embId = CONFIG.embroidery?.productId;
   if (embId) {
     const cart = await c.currentCart.getCurrentCart().catch(() => null);
@@ -422,5 +444,5 @@ export async function _debug() {
   const emb = await getEmbroideryProduct().catch(e => ({ error: String(e) }));
   const fn = await fetch(CONFIG.embroidery?.designsEndpoint || '/api/embroidery').then(r => r.ok ? r.json() : { ok: false, status: r.status }).catch(e => ({ ok: false, error: String(e) }));
   const memberFn = await fetch('/api/member?action=ping').then(r => r.ok ? r.json() : { ok: false, status: r.status }).catch(e => ({ ok: false, error: String(e) }));
-  return { client: true, cms: !!c.items, membersModule: !!c.members, loggedIn: !!c.auth.loggedIn?.(), uploadFunction: fn, memberFunction: memberFn, embroidery: emb && { name: emb.product?.name, id: emb.product?.id, kind: emb.kind, text: emb.text, logo: emb.logo, note: emb.note && { name: emb.note.name, key: emb.note.text?.key }, variants: emb.variants, error: emb.error }, sample: res.items[0] || null };
+  return { client: true, sdk: sdkStatus, cms: !!c.items, membersModule: !!c.members, loggedIn: !!c.auth.loggedIn?.(), uploadFunction: fn, memberFunction: memberFn, embroidery: emb && { name: emb.product?.name, id: emb.product?.id, kind: emb.kind, text: emb.text, logo: emb.logo, note: emb.note && { name: emb.note.name, key: emb.note.text?.key }, variants: emb.variants, error: emb.error }, sample: res.items[0] || null };
 }
