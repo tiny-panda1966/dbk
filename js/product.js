@@ -25,7 +25,7 @@ const state = { sel: {}, text: {}, qty: 1, photo: 0, tab: '3d', tried: false };
 
 const [embProduct, threads] = await Promise.all([getEmbroideryProduct().catch(() => null), getThreads()]);
 const embPrice = kind => {
-  if (embProduct) { const ch = embProduct[kind]; return embProduct.product.price + (ch?.add || 0); }
+  if (embProduct?.[kind]) return embProduct[kind].price;
   return getMode() === 'live' ? null : CONFIG.embroidery.fallbackPrices[kind];
 };
 const prices = { text: embPrice('text'), logo: embPrice('logo') };
@@ -131,14 +131,14 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
     if (e) {
       ref = await saveDesign({ title: `${p.name} – ${e.mode === 'text' ? e.text : e.uploadName}`, capName: p.name, capSlug: p.slug, quantity: state.qty, mode: e.mode, text: e.text, font: e.font, thread: e.thread, size: e.scale, rotation: e.rot, placement: e.placement, locked: e.locked, uploadName: e.uploadName, logo: e.logo, preview: e.preview, status: 'New' });
       spec = embSpec(e, ref);
-      if (!embProduct && textMods[0]) { const k = textMods[0].key; capTexts[k] = [capTexts[k], 'EMBROIDERY – ' + spec].filter(Boolean).join('\n').slice(0, textMods[0].text.max); }
+      if (!(embProduct?.[e.mode === 'upload' ? 'logo' : 'text']) && textMods[0]) { const k = textMods[0].key; capTexts[k] = [capTexts[k], 'EMBROIDERY – ' + spec].filter(Boolean).join('\n').slice(0, textMods[0].text.max); }
     }
     const fit = [...choiceMods.map(m => `${label(m)}: ${chosen(m)?.name || '—'}`), ...textMods.filter(m => state.text[m.key]?.trim()).map(m => `${m.name.replace(' (Please Specify)', '')}: ${state.text[m.key].trim()}`)];
     await addToCart(p, { choices: state.sel, texts: capTexts, qty: state.qty, unit: unit() - embCost(), summary: fit });
-    if (e && embProduct) {
-      const choice = embProduct[e.mode === 'upload' ? 'logo' : 'text'];
-      await addToCart(embProduct.product, {
-        choices: embProduct.mod && choice ? { [embProduct.mod.key]: choice.key } : {},
+    const choice = e && embProduct?.[e.mode === 'upload' ? 'logo' : 'text'];
+    if (e && choice) {
+      await addToCart(embProduct.kind === 'variant' ? { ...embProduct.product, variantId: choice.variantId } : embProduct.product, {
+        choices: embProduct.kind === 'modifier' ? { [embProduct.mod.key]: choice.key } : {},
         texts: embProduct.note ? { [embProduct.note.text.key]: spec.slice(0, embProduct.note.text.max) } : {},
         qty: state.qty, unit: embCost(), summary: [spec],
       });

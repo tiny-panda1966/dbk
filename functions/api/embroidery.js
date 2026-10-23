@@ -5,7 +5,7 @@
 // Cloudflare Pages → Settings → Variables and secrets:
 //   WIX_API_KEY        (secret)  Wix API key with "Wix Media" + "Wix Data" permissions
 //   WIX_SITE_ID                  Site ID (from the dashboard URL: manage.wix.com/dashboard/<SITE_ID>/…)
-//   WIX_COLLECTION               CMS collection ID (default: embroideryDesign)
+//   WIX_COLLECTION               CMS collection ID (default: embroideryDesigns)
 //   WIX_MEDIA_FOLDER  (optional) Media Manager folder ID for uploads
 
 const WIX = 'https://www.wixapis.com';
@@ -61,7 +61,7 @@ export async function onRequestPost({ request, env }) {
     };
     const ins = await fetch(`${WIX}/wix-data/v2/items`, {
       method: 'POST', headers: { Authorization: env.WIX_API_KEY, 'wix-site-id': env.WIX_SITE_ID, 'content-type': 'application/json' },
-      body: JSON.stringify({ dataCollectionId: env.WIX_COLLECTION || 'embroideryDesign', dataItem: { data } }),
+      body: JSON.stringify({ dataCollectionId: env.WIX_COLLECTION || 'embroideryDesigns', dataItem: { data } }),
     });
     if (!ins.ok) throw new Error('cms insert ' + ins.status + ' ' + (await ins.text()).slice(0, 300));
     const out = await ins.json();
@@ -71,4 +71,4 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
-export const onRequestGet = ({ env }) => json({ ok: true, configured: !!(env.WIX_API_KEY && env.WIX_SITE_ID), collection: env.WIX_COLLECTION || 'embroideryDesign' });
+export const onRequestGet = ({ env }) => json({ ok: true, configured: !!(env.WIX_API_KEY && env.WIX_SITE_ID), collection: env.WIX_COLLECTION || 'embroideryDesigns' });

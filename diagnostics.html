@@ -10,10 +10,13 @@
 <body>
 <h1>Wix Headless connection check</h1>
 <p id="status">Checking…</p>
+<p><button id="test" style="min-height:44px;padding:0 16px;font-weight:700;cursor:pointer">Test save to embroidery CMS</button> <span style="color:#62615e">Adds one item titled “TEST – diagnostics”. Delete it afterwards.</span></p>
+<pre id="saveOut"></pre>
 <pre id="out"></pre>
 <script type="module">
   import { CONFIG } from './js/config.js';
-  import { _debug, listProducts, getMode } from './js/wix.js';
+  import { _debug, _testSave, listProducts, getMode } from './js/wix.js';
+  document.getElementById('test').onclick = async e => { e.target.disabled = true; document.getElementById('saveOut').textContent = 'Saving…'; document.getElementById('saveOut').textContent = JSON.stringify(await _testSave(), null, 2); e.target.disabled = false; };
   const s = document.getElementById('status'), out = document.getElementById('out');
   sessionStorage.removeItem('dbk.products.v1');
   try {

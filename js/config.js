@@ -19,10 +19,10 @@ export const CONFIG = {
     // Wix product ID of "Custom Embroidery" (takes priority over slug / name matching)
     productId: 'db58675b-969f-411b-b054-1e79c66c56a9',
     // Wix CMS collection that stores each design + placement preview (see README)
-    designsCollection: 'embroideryDesign',
+    designsCollection: 'embroideryDesigns',
     // Cloudflare Pages Function that uploads images to the Wix Media Manager and saves the CMS item
     designsEndpoint: '/api/embroidery',
     // Shown when no embroidery product is found (preview / fallback mode)
-    fallbackPrices: { text: 11, logo: 41 },
+    fallbackPrices: { text: 10, logo: 20 },
   },
 };

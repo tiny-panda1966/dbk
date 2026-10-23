@@ -121,12 +121,36 @@ export async function listProducts() {
   return items;
 }
 
+// Variants (product OPTIONS such as "Embroidery options") with their own price. Visitors don't get variantsInfo
+// from product queries, so read them from the read-only variants API.
+const normVariant = v => {
+  const ch = (v.choices || v.optionChoices || []).map(c => c.optionChoiceNames || c);
+  return {
+    id: v.variantId || v._id || v.id,
+    choices: ch.map(c => ({ option: c.optionName || c.option || '', choice: c.choiceName || c.choice || c.name || '' })),
+    price: Number(v.price?.actualPrice?.amount ?? v.actualPrice?.amount ?? v.price?.amount ?? v.productData?.actualPriceRange?.minValue?.amount ?? NaN),
+    sku: v.sku || '',
+  };
+};
+export async function getVariants(productId, raw) {
+  const fromRaw = raw?.variantsInfo?.variants;
+  if (fromRaw?.length && fromRaw.some(v => v.price)) return fromRaw.map(normVariant);
+  const c = await getClient(); if (!c) return [];
+  try {
+    let res = await c.readOnlyVariantsV3.queryVariants().eq('productData.productId', productId).limit(100).find();
+    const all = [...res.items];
+    while (res.hasNext && res.hasNext()) { res = await res.next(); all.push(...res.items); }
+    saveTokens(c); return all.map(normVariant);
+  } catch (e) { console.warn('[DBK] Variant query failed:', e); return (fromRaw || []).map(normVariant); }
+}
+
 export async function getProduct(slug) {
   const c = await getClient();
   if (c) {
     try {
       const res = await c.productsV3.getProductBySlug(slug, { fields: ['MEDIA_ITEMS_INFO', 'PLAIN_DESCRIPTION', 'CURRENCY'] });
-      const p = normV3(res.product || res);
+      const raw = res.product || res;
+      const p = normV3(raw); p._raw = raw;
       if (!p.variantId) {
         try {
           const v = await c.readOnlyVariantsV3.queryVariants().eq('productData.productId', p.id).limit(1).find();
@@ -217,9 +241,16 @@ export async function getEmbroideryProduct() {
     || items.find(p => /embroider/i.test(p.name) && !/welding cap|beanie|skull|fabric|pattern/i.test(p.name));
   if (!cand) return null;
   const p = await getProduct(cand.slug); if (!p) return null;
+  const note = p.modifiers.find(m => m.type === 'FREE_TEXT') || null;
+  // A) "Embroidery options" is a product option → one variant per choice, each with its own price
+  const variants = await getVariants(p.id, p._raw);
+  const vPick = re => { const v = variants.find(v => v.choices.some(c => re.test(c.choice))); return v ? { variantId: v.id, name: v.choices.map(c => c.choice).join(' / '), price: Number.isFinite(v.price) ? v.price : p.price } : null; };
+  const vt = vPick(/name|word/i), vl = vPick(/logo|image/i);
+  if (vt || vl) return { product: p, kind: 'variant', text: vt, logo: vl, note, variants };
+  // B) a choice modifier with added prices
   const mod = p.modifiers.find(m => m.type !== 'FREE_TEXT' && m.choices.some(c => /name|word|logo|image/i.test(c.name)));
-  const pick = re => mod?.choices.find(c => re.test(c.name)) || null;
-  return { product: p, mod, text: pick(/name|word/i), logo: pick(/logo|image/i), note: p.modifiers.find(m => m.type === 'FREE_TEXT') || null };
+  const mPick = re => { const ch = mod?.choices.find(c => re.test(c.name)); return ch ? { key: ch.key, name: ch.name, price: p.price + (ch.add || 0) } : null; };
+  return { product: p, kind: 'modifier', mod, text: mPick(/name|word/i), logo: mPick(/logo|image/i), note, variants };
 }
 
 // Saves the design + placement preview to the Wix CMS so Kelly can see exactly what the customer saw.
@@ -238,13 +269,27 @@ export async function saveDesign(design) {
   }
   const c = await getClient();
   if (!c || !c.items) return '';
-  const col = CONFIG.embroidery?.designsCollection || 'embroideryDesign';
+  const col = CONFIG.embroidery?.designsCollection || 'embroideryDesigns';
   const { preview, logo, ...textOnly } = design;
   try {
     const item = c.items.insert ? await c.items.insert(col, textOnly) : (await c.items.insertDataItem({ dataCollectionId: col, dataItem: { data: textOnly } })).dataItem;
     saveTokens(c);
     return item?._id || item?.id || '';
   } catch (e) { console.warn('[DBK] Saving embroidery design to CMS failed:', e); return ''; }
+}
+
+// diagnostics.html "Test save": runs both save paths and reports each result verbatim
+export async function _testSave() {
+  const design = { title: 'TEST – diagnostics', capName: 'Test cap', capSlug: 'test', quantity: 1, mode: 'text', text: 'TEST', font: 'Graduate', thread: 'Black', size: 100, rotation: 0, placement: 'Front · Crown', locked: true, uploadName: '', status: 'Test',
+    preview: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' };
+  const out = {};
+  try { const res = await fetch(CONFIG.embroidery.designsEndpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(design) }); out.function = { status: res.status, body: await res.text() }; }
+  catch (e) { out.function = { error: String(e) }; }
+  const c = await getClient(); const col = CONFIG.embroidery.designsCollection; const { preview, ...t } = design;
+  if (!c?.items) out.sdk = { error: '@wix/data module not loaded' };
+  else try { const item = c.items.insert ? await c.items.insert(col, t) : (await c.items.insertDataItem({ dataCollectionId: col, dataItem: { data: t } })).dataItem; out.sdk = { ok: true, id: item?._id || item?.id }; }
+  catch (e) { out.sdk = { collection: col, error: e?.details?.applicationError || e?.message || String(e) }; }
+  return out;
 }
 
 export function clearLocalCart() { writeLocal([]); emit(); }
@@ -257,5 +302,5 @@ export async function _debug() {
   await listProducts();
   const emb = await getEmbroideryProduct().catch(e => ({ error: String(e) }));
   const fn = await fetch(CONFIG.embroidery?.designsEndpoint || '/api/embroidery').then(r => r.ok ? r.json() : { ok: false, status: r.status }).catch(e => ({ ok: false, error: String(e) }));
-  return { client: true, cms: !!c.items, uploadFunction: fn, embroidery: emb && { name: emb.product?.name, slug: emb.product?.slug, price: emb.product?.price, option: emb.mod?.name, text: emb.text, logo: emb.logo, note: emb.note?.name, error: emb.error }, sample: res.items[0] || null };
+  return { client: true, cms: !!c.items, uploadFunction: fn, embroidery: emb && { name: emb.product?.name, id: emb.product?.id, kind: emb.kind, text: emb.text, logo: emb.logo, note: emb.note && { name: emb.note.name, key: emb.note.text?.key }, variants: emb.variants, error: emb.error }, sample: res.items[0] || null };
 }

@@ -32,14 +32,14 @@ Static storefront for DBK – Welding Caps, hosted on Cloudflare Pages and conne
 Until step 1 is done the site runs on `data/catalog.json` (same products, local cart, checkout disabled with a note). Set `dataMode: 'live'` in `js/config.js` once Wix is connected so failures show instead of falling back.
 
 ## Phase 2 setup – embroidery
-**1. Embroidery product (charges the customer).** In Wix Stores create (or reuse) a product named e.g. **"Custom Embroidery"** with:
+**1. Embroidery product (charges the customer).** Current setup: **Custom Embroidery** (ID `db58675b-…`, set in `js/config.js`) with the product option **Embroidery options** (None $0 / Name | Word $10 / Logo | Image $20, one variant each) and the free-text modifier **Design Details** (500 chars). The site reads the variant prices and adds the matching variant to the cart. Alternative setup that also works: In Wix Stores create (or reuse) a product named e.g. **"Custom Embroidery"** with:
 - a choice option with choices **"Name | Word"** and **"Logo | Image"** (price set on the product + each choice's added price)
 - a free-text option, e.g. **"Embroidery details"**, max 500 characters
 
 The site finds it by name (anything containing "Embroidery" that isn't a cap/fabric), or set `embroidery.productSlug` in `js/config.js`. Each embroidered cap adds this product as a second cart line, with the full spec in the free-text field: cap, text/font or logo file, thread, size, rotation, placement and design ref.
 If no embroidery product exists, the spec is added to the cap's first notes field instead and no embroidery charge is made.
 
-**2. CMS collection – `embroideryDesign`** (stores what the customer saw). Permissions: *Add content – Admin*, *View – Admin*. Fields:
+**2. CMS collection – `embroideryDesigns`** (stores what the customer saw). Permissions: *Add content – Admin*, *View – Admin*. Fields:
 | Field | Type |
 | --- | --- |
 | title, capName, capSlug, mode, text, font, thread, placement, uploadName, status | Text |
@@ -51,7 +51,7 @@ If no embroidery product exists, the spec is added to the cap's first notes fiel
 **3. Upload function – `functions/api/embroidery.js`.** Cloudflare deploys this automatically as `/api/embroidery`. It uploads the preview and logo to the **Wix Media Manager**, then inserts the CMS item with real Image fields. It runs on the server because visitor logins can't upload media. Add these in Cloudflare Pages → Settings → Variables and secrets, then redeploy:
 - `WIX_API_KEY` (encrypt): Wix account → API Keys → create a key for this site with **Wix Media** and **Wix Data** (CMS) permissions.
 - `WIX_SITE_ID`: the ID in the dashboard URL `manage.wix.com/dashboard/<SITE_ID>/…`
-- `WIX_COLLECTION`: `embroideryDesign`
+- `WIX_COLLECTION`: `embroideryDesigns`
 - `WIX_MEDIA_FOLDER` (optional): Media Manager folder ID, e.g. "Embroidery uploads".
 
 The CMS item ID is written on the order line as "Design ref". If the function isn't configured, the site saves the text fields only (no images). That fallback needs *Add content – Anyone* on the collection.
