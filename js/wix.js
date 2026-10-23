@@ -443,6 +443,13 @@ async function memberToken() {
   try { await c.members?.getCurrentMember(); } catch (e) {} // refreshes the token if needed
   saveTokens(c); return c.auth.getTokens()?.accessToken?.value || null;
 }
+export async function authedFetch(url, body) {
+  const tok = await memberToken(); if (!tok) throw Object.assign(new Error('Not logged in'), { code: 401 });
+  const res = await fetch(url, { method: body ? 'POST' : 'GET', headers: { 'x-member-token': tok, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(out.error || 'Request failed'), { code: res.status });
+  return out;
+}
 export async function memberApi(action, body) {
   const tok = await memberToken(); if (!tok) throw Object.assign(new Error('Not logged in'), { code: 401 });
   const res = await fetch(`/api/member?action=${action}`, { method: body ? 'POST' : 'GET', headers: { 'x-member-token': tok, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });

@@ -1,5 +1,5 @@
 import { mountChrome, esc, toast, openCart, productUrl } from './ui.js';
-import { getMember, login, logout, getPrefs, savePrefs, getOrders, getSurplus, reorder, listProducts, getProduct, getThreads, mediaId, IMG, money, FEATURED, findFeatured } from './wix.js';
+import { authedFetch, getMember, login, logout, getPrefs, savePrefs, getOrders, getSurplus, reorder, listProducts, getProduct, getThreads, mediaId, IMG, money, FEATURED, findFeatured } from './wix.js';
 import { FONTS } from './builder.js';
 
 await mountChrome();
@@ -44,6 +44,7 @@ if (!member) {
       <div data-surplus></div>
     </section>`;
   root.querySelector('[data-logout]').onclick = () => logout();
+  authedFetch('/api/admin?action=whoami').then(() => root.querySelector('.acct-head .hero-ctas').insertAdjacentHTML('afterbegin', '<a href="admin.html" class="btn btn-yellow">Admin</a>')).catch(() => {});
 
   const [prefs0, threads, items] = await Promise.all([getPrefs(), getThreads(), listProducts()]);
   let prefs = prefs0 || { options: {}, font: '', thread: '', autoApply: true, instructions: '', instructionsConfirmed: '', instructionsStatus: '' };

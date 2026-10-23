@@ -82,6 +82,11 @@ The CMS item ID is written on the order line as "Design ref". Each embroidered c
 
 Check `/diagnostics.html` → "Member function" should show `configured: true`.
 
+## Admin – `/admin.html`
+Log in with an admin account (default **tiny.panda@tiny-panda.com**; set `ADMIN_EMAILS` in Cloudflare as a comma-separated list to change it). Admins also see an **Admin** button on their account page.
+- **Member surplus caps:** search or pick a category to add any product, set the discount %, switch it active or inactive, reorder by dragging (or the ↑ ↓ buttons), remove, then **Save changes**. It writes the `memberSurplus` collection (product = product ID, sortOrder = list order).
+- `functions/api/admin.js` checks the Wix login and admin email on every request, so non-admins get "No access".
+
 ## Categories, search and hidden products
 - Category tabs on the homepage and links in the menu come from **Wix Stores categories**, shown in the order of `categories` in `js/config.js` (names matched loosely, so "Skull Caps" matches "Skulls Caps"). Categories with no visible products are skipped.
 - Only products in `builderCategory` ("Welding Caps") get the 3D builder and embroidery. Other products get a normal product page with photos and options.
