@@ -212,8 +212,9 @@ export async function getThreads() {
 export async function getEmbroideryProduct() {
   if (mode !== 'live') return null;
   const items = await listProducts();
-  const slug = CONFIG.embroidery?.productSlug;
-  const cand = slug ? items.find(p => p.slug === slug) : items.find(p => /embroider/i.test(p.name) && !/welding cap|beanie|skull|fabric|pattern/i.test(p.name));
+  const { productId, productSlug } = CONFIG.embroidery || {};
+  const cand = (productId && items.find(p => p.id === productId)) || (productSlug && items.find(p => p.slug === productSlug))
+    || items.find(p => /embroider/i.test(p.name) && !/welding cap|beanie|skull|fabric|pattern/i.test(p.name));
   if (!cand) return null;
   const p = await getProduct(cand.slug); if (!p) return null;
   const mod = p.modifiers.find(m => m.type !== 'FREE_TEXT' && m.choices.some(c => /name|word|logo|image/i.test(c.name)));
@@ -222,12 +223,25 @@ export async function getEmbroideryProduct() {
 }
 
 // Saves the design + placement preview to the Wix CMS so Kelly can see exactly what the customer saw.
+// 1st choice: server function (uploads preview/logo to Wix Media Manager, CMS Image fields).
+// Fallback: visitor-level CMS insert of the text fields only (needs "Add content: Anyone" on the collection).
 export async function saveDesign(design) {
+  if (mode !== 'live') return '';
+  const ep = CONFIG.embroidery?.designsEndpoint;
+  if (ep) {
+    try {
+      const res = await fetch(ep, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(design) });
+      const out = await res.json().catch(() => ({}));
+      if (res.ok && out.id) return out.id;
+      console.warn('[DBK] Design upload function failed:', res.status, out.error || out);
+    } catch (e) { console.warn('[DBK] Design upload function unreachable:', e); }
+  }
   const c = await getClient();
-  if (!c || !c.items || mode !== 'live') return '';
-  const col = CONFIG.embroidery?.designsCollection || 'EmbroideryDesigns';
+  if (!c || !c.items) return '';
+  const col = CONFIG.embroidery?.designsCollection || 'embroideryDesign';
+  const { preview, logo, ...textOnly } = design;
   try {
-    const item = c.items.insert ? await c.items.insert(col, design) : (await c.items.insertDataItem({ dataCollectionId: col, dataItem: { data: design } })).dataItem;
+    const item = c.items.insert ? await c.items.insert(col, textOnly) : (await c.items.insertDataItem({ dataCollectionId: col, dataItem: { data: textOnly } })).dataItem;
     saveTokens(c);
     return item?._id || item?.id || '';
   } catch (e) { console.warn('[DBK] Saving embroidery design to CMS failed:', e); return ''; }
@@ -242,5 +256,6 @@ export async function _debug() {
   const res = await c.productsV3.queryProducts().limit(1).find();
   await listProducts();
   const emb = await getEmbroideryProduct().catch(e => ({ error: String(e) }));
-  return { client: true, cms: !!c.items, embroidery: emb && { name: emb.product?.name, slug: emb.product?.slug, price: emb.product?.price, option: emb.mod?.name, text: emb.text, logo: emb.logo, note: emb.note?.name, error: emb.error }, sample: res.items[0] || null };
+  const fn = await fetch(CONFIG.embroidery?.designsEndpoint || '/api/embroidery').then(r => r.ok ? r.json() : { ok: false, status: r.status }).catch(e => ({ ok: false, error: String(e) }));
+  return { client: true, cms: !!c.items, uploadFunction: fn, embroidery: emb && { name: emb.product?.name, slug: emb.product?.slug, price: emb.product?.price, option: emb.mod?.name, text: emb.text, logo: emb.logo, note: emb.note?.name, error: emb.error }, sample: res.items[0] || null };
 }

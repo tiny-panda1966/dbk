@@ -16,8 +16,12 @@ export const CONFIG = {
     // Wix product that charges for embroidery, with a choice option (e.g. "Name | Word" / "Logo | Image")
     // and a free-text option that receives the design details. Leave '' to find it by name ("Embroidery …").
     productSlug: '',
+    // Wix product ID of "Custom Embroidery" (takes priority over slug / name matching)
+    productId: 'db58675b-969f-411b-b054-1e79c66c56a9',
     // Wix CMS collection that stores each design + placement preview (see README)
-    designsCollection: 'EmbroideryDesigns',
+    designsCollection: 'embroideryDesign',
+    // Cloudflare Pages Function that uploads images to the Wix Media Manager and saves the CMS item
+    designsEndpoint: '/api/embroidery',
     // Shown when no embroidery product is found (preview / fallback mode)
     fallbackPrices: { text: 11, logo: 41 },
   },

@@ -39,9 +39,22 @@ Until step 1 is done the site runs on `data/catalog.json` (same products, local 
 The site finds it by name (anything containing "Embroidery" that isn't a cap/fabric), or set `embroidery.productSlug` in `js/config.js`. Each embroidered cap adds this product as a second cart line, with the full spec in the free-text field: cap, text/font or logo file, thread, size, rotation, placement and design ref.
 If no embroidery product exists, the spec is added to the cap's first notes field instead and no embroidery charge is made.
 
-**2. CMS collection (stores what the customer saw).** In the Wix CMS create a collection **EmbroideryDesigns**, permissions: *Add content – Anyone*, *View – Admin*. Fields (all Text unless noted):
-`title`, `capName`, `capSlug`, `quantity` (Number), `mode`, `text`, `font`, `thread`, `size` (Number), `rotation` (Number), `placement`, `locked` (Boolean), `uploadName`, `logo`, `preview`, `status`.
-`preview` holds a JPEG of the 3D cap with the embroidery in place; `logo` holds the customer's uploaded file. Both are image data URLs, so you can paste one into a browser to view it. The item ID is written on the order as "Design ref".
+**2. CMS collection – `embroideryDesign`** (stores what the customer saw). Permissions: *Add content – Admin*, *View – Admin*. Fields:
+| Field | Type |
+| --- | --- |
+| title, capName, capSlug, mode, text, font, thread, placement, uploadName, status | Text |
+| quantity, size, rotation | Number |
+| locked | Boolean |
+| preview | **Image** – the 3D cap with the embroidery in place |
+| logo | **Image** – the customer's uploaded logo (PNG/JPG/SVG) |
+
+**3. Upload function – `functions/api/embroidery.js`.** Cloudflare deploys this automatically as `/api/embroidery`. It uploads the preview and logo to the **Wix Media Manager**, then inserts the CMS item with real Image fields. It runs on the server because visitor logins can't upload media. Add these in Cloudflare Pages → Settings → Variables and secrets, then redeploy:
+- `WIX_API_KEY` (encrypt): Wix account → API Keys → create a key for this site with **Wix Media** and **Wix Data** (CMS) permissions.
+- `WIX_SITE_ID`: the ID in the dashboard URL `manage.wix.com/dashboard/<SITE_ID>/…`
+- `WIX_COLLECTION`: `embroideryDesign`
+- `WIX_MEDIA_FOLDER` (optional): Media Manager folder ID, e.g. "Embroidery uploads".
+
+The CMS item ID is written on the order line as "Design ref". If the function isn't configured, the site saves the text fields only (no images). That fallback needs *Add content – Anyone* on the collection.
 
 `/diagnostics.html` shows whether the embroidery product and CMS module were found.
 

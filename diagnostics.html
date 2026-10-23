@@ -21,7 +21,7 @@
     const items = await listProducts();
     const live = getMode() === 'live';
     s.innerHTML = `<b class="${live ? 'ok' : 'bad'}">${live ? 'LIVE – connected to Wix Stores' : 'FALLBACK – using the exported catalogue'}</b> · ${items.length} products · client id ${CONFIG.clientId.slice(0, 8)}… · origin ${location.origin}`;
-    out.textContent = 'CMS module: ' + (d.cms ? 'yes' : 'no') + '\nEmbroidery product: ' + JSON.stringify(d.embroidery, null, 2) + '\n\nSample product:\n' + JSON.stringify(d.sample, null, 2);
+    out.textContent = 'CMS module: ' + (d.cms ? 'yes' : 'no') + '\nDesign upload function: ' + JSON.stringify(d.uploadFunction) + '\nEmbroidery product: ' + JSON.stringify(d.embroidery, null, 2) + '\n\nSample product:\n' + JSON.stringify(d.sample, null, 2);
   } catch (e) {
     s.innerHTML = `<b class="bad">Error</b>: ${e.message || e}`;
     out.textContent = String(e.stack || e);
