@@ -113,9 +113,14 @@ $$('[data-k]').forEach(b => b.onclick = () => { state.sel[b.dataset.m] = b.datas
 $$('[data-t]').forEach(t => t.oninput = () => { state.text[t.dataset.t] = t.value; sync(); });
 $$('[data-qty]').forEach(b => b.onclick = () => { state.qty = Math.max(1, Math.min(99, state.qty + +b.dataset.qty)); sync(); });
 
-function embSpec(e, ref) {
+// Short tag written on both the cap and its embroidery line. Makes each embroidered cap a unique cart line
+// (Wix won't merge it with an identical cap) and tells Kelly which embroidery belongs to which cap.
+const newTag = () => Array.from(crypto.getRandomValues(new Uint8Array(3)), b => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('') + Date.now().toString(36).slice(-2).toUpperCase();
+const tagMod = () => textMods.find(m => /custom size information|additional notes/i.test(m.name + ' ' + m.text.title)) || textMods[textMods.length - 1];
+
+function embSpec(e, ref, tag) {
   const what = e.mode === 'text' ? `Text: "${e.text}" | Font: ${e.font}` : `Logo/image: ${e.uploadName}`;
-  return [`For: ${p.name} x${state.qty}`, what, `Thread: ${e.thread}`, `Size: ${e.scale}%`, `Rotation: ${e.rot}°`, `Placement: ${e.placement || 'not set'}${e.locked ? '' : ' (not locked)'}`, ref ? `Design ref: ${ref}` : 'Design ref: none – check with customer'].join(' | ');
+  return [`Embroidery ref: ${tag}`, `For: ${p.name} x${state.qty}`, what, `Thread: ${e.thread}`, `Size: ${e.scale}%`, `Rotation: ${e.rot}°`, `Placement: ${e.placement || 'not set'}${e.locked ? '' : ' (not locked)'}`, ref ? `Design ref: ${ref}` : 'Design ref: none – check with customer'].join(' | ');
 }
 
 $$('[data-add]').forEach(b => b.onclick = async () => {
@@ -127,13 +132,16 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
   try {
     const e = await builder.snapshot();
     const capTexts = { ...state.text };
-    let spec = '', ref = '';
+    let spec = '', ref = '', tag = '';
     if (e) {
-      ref = await saveDesign({ title: `${p.name} – ${e.mode === 'text' ? e.text : e.uploadName}`, capName: p.name, capSlug: p.slug, quantity: state.qty, mode: e.mode, text: e.text, font: e.font, thread: e.thread, size: e.scale, rotation: e.rot, placement: e.placement, locked: e.locked, uploadName: e.uploadName, logo: e.logo, preview: e.preview, status: 'New' });
-      spec = embSpec(e, ref);
+      tag = newTag();
+      ref = await saveDesign({ title: `${p.name} – ${e.mode === 'text' ? e.text : e.uploadName}`, embroideryRef: tag, capName: p.name, capSlug: p.slug, quantity: state.qty, mode: e.mode, text: e.text, font: e.font, thread: e.thread, size: e.scale, rotation: e.rot, placement: e.placement, locked: e.locked, uploadName: e.uploadName, logo: e.logo, preview: e.preview, status: 'New' });
+      spec = embSpec(e, ref, tag);
+      const tm = tagMod();
+      if (tm) capTexts[tm.key] = [`Embroidery ref: ${tag}`, capTexts[tm.key]].filter(Boolean).join('\n').slice(0, tm.text.max);
       if (!(embProduct?.[e.mode === 'upload' ? 'logo' : 'text']) && textMods[0]) { const k = textMods[0].key; capTexts[k] = [capTexts[k], 'EMBROIDERY – ' + spec].filter(Boolean).join('\n').slice(0, textMods[0].text.max); }
     }
-    const fit = [...choiceMods.map(m => `${label(m)}: ${chosen(m)?.name || '—'}`), ...textMods.filter(m => state.text[m.key]?.trim()).map(m => `${m.name.replace(' (Please Specify)', '')}: ${state.text[m.key].trim()}`)];
+    const fit = [...(tag ? [`Embroidery ref: ${tag}`] : []), ...choiceMods.map(m => `${label(m)}: ${chosen(m)?.name || '—'}`), ...textMods.filter(m => state.text[m.key]?.trim()).map(m => `${m.name.replace(' (Please Specify)', '')}: ${state.text[m.key].trim()}`)];
     const capLine = await addToCart(p, { choices: state.sel, texts: capTexts, qty: state.qty, unit: unit() - embCost(), summary: fit });
     const choice = e && embProduct?.[e.mode === 'upload' ? 'logo' : 'text'];
     if (e && choice) {

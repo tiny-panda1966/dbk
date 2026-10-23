@@ -42,7 +42,7 @@ If no embroidery product exists, the spec is added to the cap's first notes fiel
 **2. CMS collection – `embroideryDesigns`** (stores what the customer saw). Permissions: *Add content – Admin*, *View – Admin*. Fields:
 | Field | Type |
 | --- | --- |
-| title, capName, capSlug, mode, text, font, thread, placement, uploadName, status | Text |
+| title, embroideryRef, capName, capSlug, mode, text, font, thread, placement, uploadName, status | Text |
 | quantity, size, rotation | Number |
 | locked | Boolean |
 | preview | **Image** – the 3D cap with the embroidery in place |
@@ -54,7 +54,7 @@ If no embroidery product exists, the spec is added to the cap's first notes fiel
 - `WIX_COLLECTION`: `embroideryDesigns`
 - `WIX_MEDIA_FOLDER` (optional): Media Manager folder ID, e.g. "Embroidery uploads".
 
-The CMS item ID is written on the order line as "Design ref". If the function isn't configured, the site saves the text fields only (no images). That fallback needs *Add content – Anyone* on the collection.
+The CMS item ID is written on the order line as "Design ref". Each embroidered cap also gets a short **Embroidery ref** (e.g. `K7F2QX`) in its notes field and on its embroidery line, so it's always a separate cart line and Kelly can match cap ⇄ embroidery ⇄ CMS item. If the function isn't configured, the site saves the text fields only (no images). That fallback needs *Add content – Anyone* on the collection.
 
 `/diagnostics.html` shows whether the embroidery product and CMS module were found.
 

@@ -66,7 +66,7 @@ export async function onRequestPost({ request, env }) {
     const preview = b.preview ? await upload(env, b.preview, cap, 'preview', MAX.preview) : '';
     const logo = b.mode === 'upload' && b.logo ? await upload(env, b.logo, cap, 'logo', MAX.logo) : '';
     const data = {
-      title: str(b.title, 200), capName: str(b.capName, 200), capSlug: str(b.capSlug, 200), quantity: num(b.quantity),
+      title: str(b.title, 200), embroideryRef: str(b.embroideryRef, 12), capName: str(b.capName, 200), capSlug: str(b.capSlug, 200), quantity: num(b.quantity),
       mode: str(b.mode, 20), text: str(b.text, 40), font: str(b.font, 60), thread: str(b.thread, 40),
       size: num(b.size), rotation: num(b.rotation), placement: str(b.placement, 300), locked: !!b.locked,
       uploadName: str(b.uploadName, 120), status: 'New',
