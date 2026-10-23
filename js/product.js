@@ -1,5 +1,5 @@
 import { mountChrome, esc, toast, openCart } from './ui.js';
-import { getMember, getPrefs, savePrefs, getSurplus, login } from './wix.js';
+import { getMember, getPrefs, savePrefs, getSurplus, login, isHidden, listCategories, builderCategoryId } from './wix.js';
 import { listProducts, getProduct, addToCart, linkLines, getEmbroideryProduct, getThreads, saveDesign, getMode, IMG, IMG_FIT, money, FEATURED, findFeatured } from './wix.js';
 import { createBuilder } from './builder.js';
 import { CONFIG } from './config.js';
@@ -14,15 +14,20 @@ const sizeVal = s => { if (/custom/i.test(s)) return 99; const m = /(\d+)(?:\s+(
 
 let slug = new URLSearchParams(location.search).get('slug');
 if (!slug) { const items = await listProducts(); slug = (findFeatured(items, FEATURED[0]) || items[0])?.slug; }
-const p = slug ? await getProduct(slug) : null;
-if (!p) { root.innerHTML = '<div class="pad"><h1 class="display">Cap not found</h1><p><a href="index.html#prints" class="btn btn-dark">See all caps</a></p></div>'; throw new Error('not found'); }
+const p0 = slug ? await getProduct(slug) : null;
+const p = p0 && !isHidden(p0) ? p0 : null;
+if (!p) { root.innerHTML = '<div class="pad"><h1 class="display">Product not found</h1><p><a href="index.html#prints" class="btn btn-dark" style="white-space:nowrap">See all products</a></p></div>'; throw new Error('not found'); }
 
 document.title = `${p.name} – DBK Welding Caps`;
 const choiceMods = p.modifiers.filter(m => m.type !== 'FREE_TEXT')
   .sort((a, b) => ((ORDER.indexOf(a.name) + 1 || 99) - (ORDER.indexOf(b.name) + 1 || 99)));
 choiceMods.forEach(m => { if (m.name === 'Cap Size') m.choices.sort((a, b) => sizeVal(a.name) - sizeVal(b.name)); if (m.name === 'Bill Size') m.choices.sort((a, b) => (/custom/i.test(a.name) - /custom/i.test(b.name)) || (/standard/i.test(b.name) - /standard/i.test(a.name))); });
 const textMods = p.modifiers.filter(m => m.type === 'FREE_TEXT');
-const state = { sel: {}, text: {}, qty: 1, photo: 0, tab: '3d', tried: false };
+const [allItems, cats, capCatId] = await Promise.all([listProducts(), listCategories(), builderCategoryId()]);
+p.cats = allItems.find(x => x.id === p.id)?.cats || p.cats || [];
+const isCap = !capCatId || p.cats.includes(capCatId);
+const myCat = cats.find(c => p.cats.includes(c.id));
+const state = { sel: {}, text: {}, qty: 1, photo: 0, tab: isCap ? '3d' : 'photos', tried: false };
 
 const [embProduct, threads] = await Promise.all([getEmbroideryProduct().catch(() => null), getThreads()]);
 const embPrice = kind => {
@@ -34,17 +39,16 @@ const prices = { text: embPrice('text'), logo: embPrice('logo') };
 const label = m => LABEL[m.name] || m.name.replace('?', '');
 const chosen = m => m.choices.find(c => c.key === state.sel[m.key]);
 let builder = null;
-const embCost = () => !builder?.active() ? 0 : (builder.mode() === 'upload' ? prices.logo : prices.text) || 0;
+const embCost = () => !builder || !builder.active() ? 0 : (builder.mode() === 'upload' ? prices.logo : prices.text) || 0;
 const unit = () => p.price + choiceMods.reduce((a, m) => a + (chosen(m)?.add || 0), 0) + textMods.reduce((a, m) => a + (state.text[m.key]?.trim() ? m.text.add : 0), 0) + embCost();
 const missing = () => choiceMods.filter(m => m.mandatory && !state.sel[m.key]);
 const needsNote = () => choiceMods.some(m => /advise below/i.test(chosen(m)?.name || '')) && !textMods.some(m => state.text[m.key]?.trim());
 
 root.innerHTML = `
-  <nav class="crumbs pad-x"><a href="index.html">Home</a> / <a href="index.html#prints">Welding caps</a> / <span>${esc(p.name)}</span></nav>
+  <nav class="crumbs pad-x"><a href="index.html">Home</a> / <a href="index.html${myCat ? '?cat=' + encodeURIComponent(myCat.slug) : ''}#prints">${esc(myCat?.name || 'All products')}</a> / <span>${esc(p.name)}</span></nav>
   <div class="pdp pad-x">
     <div class="pdp-media">
-      <div class="tabs"><button type="button" data-tab="3d">3D builder</button><button type="button" data-tab="photos">Photos</button></div>
-      <div data-builder></div>
+      ${isCap ? '<div class="tabs"><button type="button" data-tab="3d">3D builder</button><button type="button" data-tab="photos">Photos</button></div><div data-builder></div>' : ''}
       <div data-photos hidden>
         <div class="pdp-main"><img data-main alt="${esc(p.name)}"></div>
         <div class="pdp-thumbs">${p.images.map((id, i) => `<button type="button" data-ph="${i}" aria-label="Photo ${i + 1}"><img src="${IMG(id, 160)}" alt=""></button>`).join('')}</div>
@@ -52,7 +56,7 @@ root.innerHTML = `
     </div>
     <div class="pdp-info">
       <div class="pdp-title">
-        <span class="kicker">Build your cap</span>
+        <span class="kicker">${isCap ? 'Build your cap' : esc(myCat?.name || 'DBK Welding Caps')}</span>
         <h1 class="display">${esc(p.name)}</h1>
         <span class="price mono" data-price></span>
         ${p.description.length ? `<div class="pdp-desc">${p.description.map(t => `<p>${esc(t)}</p>`).join('')}</div>` : ''}
@@ -68,7 +72,7 @@ root.innerHTML = `
         </div>
         <p class="step-err" hidden>Choose a ${esc(label(m).toLowerCase())}</p>
       </section>`).join('')}
-      <section class="step" data-emb-step></section>
+      ${isCap ? '<section class="step" data-emb-step></section>' : ''}
       <div data-instr></div>
       ${textMods.map(m => `
       <label class="field"><span><strong>${esc(m.name.replace(' (Please Specify)', ''))}</strong> <span class="muted">· optional</span></span>
@@ -88,7 +92,8 @@ const billMod = choiceMods.find(m => /bill size/i.test(m.name));
 
 function sync() {
   $$('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
-  $('[data-builder]').hidden = state.tab !== '3d'; $('[data-photos]').hidden = state.tab !== 'photos';
+  if ($('[data-builder]')) $('[data-builder]').hidden = state.tab !== '3d';
+  $('[data-photos]').hidden = state.tab !== 'photos';
   if (state.tab === 'photos') $('[data-main]').src = IMG_FIT(p.images[state.photo], 1000);
   $$('[data-ph]').forEach(b => b.classList.toggle('on', +b.dataset.ph === state.photo));
   choiceMods.forEach(m => {
@@ -102,13 +107,13 @@ function sync() {
   $('[data-price]').textContent = money(unit());
   $('[data-qty-val]').textContent = state.qty;
   $('[data-bar-price]').textContent = total;
-  $('[data-bar-sub]').textContent = `Qty ${state.qty}${builder?.active() ? ' · with embroidery' : ''}`;
+  $('[data-bar-sub]').textContent = `Qty ${state.qty}${builder && builder.active() ? ' · with embroidery' : ''}`;
   const miss = missing()[0];
   $$('[data-add]').forEach(b => b.textContent = miss ? `Choose ${label(miss).toLowerCase()}` : needsNote() ? 'Add details in notes' : `Add to cart · ${total}`);
   builder?.setOptions({ liner: linerMod && chosen(linerMod)?.hex, deep: billMod && /deep/i.test(chosen(billMod)?.name || '') });
 }
 
-builder = createBuilder({ wrap: $('[data-builder]'), step: $('[data-emb-step]'), stepNo: String(choiceMods.length + 1).padStart(2, '0'), product: p, threads, prices, onChange: () => sync() });
+if (isCap) builder = createBuilder({ wrap: $('[data-builder]'), step: $('[data-emb-step]'), stepNo: String(choiceMods.length + 1).padStart(2, '0'), product: p, threads, prices, onChange: () => sync() });
 
 $$('[data-tab]').forEach(b => b.onclick = () => { state.tab = b.dataset.tab; sync(); });
 $$('[data-ph]').forEach(b => b.onclick = () => { state.photo = +b.dataset.ph; sync(); });
@@ -133,7 +138,7 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
   if (needsNote()) { root.querySelector('[data-t]')?.focus(); return; }
   $$('[data-add]').forEach(x => { x.disabled = true; x.textContent = 'Adding…'; });
   try {
-    const e = await builder.snapshot();
+    const e = builder ? await builder.snapshot() : null;
     const capTexts = { ...state.text };
     let spec = '', ref = '', tag = '';
     if (e) {
@@ -172,7 +177,7 @@ let member = null, prefs = null, surplusHit = null;
 const optNames = () => Object.fromEntries(choiceMods.map(m => [m.name, chosen(m)?.name || '']).filter(([, v]) => v));
 function applyPrefs(pr) {
   choiceMods.forEach(m => { const want = pr.options?.[m.name]; const ch = want && m.choices.find(c => c.name === want); if (ch) state.sel[m.key] = ch.key; });
-  builder.applyPrefs({ font: pr.font, thread: pr.thread }); sync();
+  builder?.applyPrefs({ font: pr.font, thread: pr.thread }); sync();
 }
 function renderMember(msg = '') {
   if (!member) {
@@ -193,7 +198,7 @@ function renderMember(msg = '') {
   memberBox.querySelector('[data-clear]')?.addEventListener('click', () => { state.sel = {}; sync(); renderMember(); });
   memberBox.querySelector('[data-save-prefs]').onclick = async e => {
     e.target.disabled = true;
-    try { prefs = await savePrefs({ options: optNames(), ...builder.prefs(), instructions: currentInstr() }); toast('Saved to your member profile'); renderMember('Preferences saved'); renderInstr(); }
+    try { prefs = await savePrefs({ options: optNames(), ...(builder?.prefs() || {}), instructions: currentInstr() }); toast('Saved to your member profile'); renderMember('Preferences saved'); renderInstr(); }
     catch (err) { toast('Couldn’t save your preferences. Please try again.'); e.target.disabled = false; }
   };
 }
@@ -219,8 +224,8 @@ function renderInstr() {
   ta.oninput = () => { state.instr = ta.value; renderConfirm(); };
   renderConfirm();
 }
-renderMember();
-(async () => {
+if (isCap) renderMember();
+if (isCap) (async () => {
   member = await getMember().catch(() => null);
   if (!member) return renderMember();
   prefs = await getPrefs();

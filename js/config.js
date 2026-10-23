@@ -12,6 +12,12 @@ export const CONFIG = {
   thankYouPath: '/thank-you.html',
   // Products shown per "Load more" on the homepage
   pageSize: 12,
+  // Categories shown on the site, in this order. Matched to Wix Stores category names (case/plural-insensitive).
+  categories: ['Welding Caps', 'Fabric', 'Custom Items', 'Embroidery Designs', 'Beanies', 'Accessories', 'Skull Caps'],
+  // Products in this category get the 3D builder + embroidery
+  builderCategory: 'Welding Caps',
+  // Never listed, searched or linked on the site (still usable in the cart). The embroidery product is added automatically.
+  hiddenProductIds: [],
   embroidery: {
     // Wix product that charges for embroidery, with a choice option (e.g. "Name | Word" / "Logo | Image")
     // and a free-text option that receives the design details. Leave '' to find it by name ("Embroidery …").

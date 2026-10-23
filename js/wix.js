@@ -4,7 +4,7 @@ import { CONFIG } from './config.js';
 
 const TOKENS_KEY = 'dbk.wixTokens';
 const LOCAL_CART_KEY = 'dbk.localCart';
-const LIST_CACHE_KEY = 'dbk.products.v1';
+const LIST_CACHE_KEY = 'dbk.products.v2';
 const LINKS_KEY = 'dbk.cartLinks'; // { embroideryLineId: capLineId }
 const readLinks = () => { try { return JSON.parse(localStorage.getItem(LINKS_KEY) || '{}'); } catch (e) { return {}; } };
 const writeLinks = l => localStorage.setItem(LINKS_KEY, JSON.stringify(l));
@@ -50,6 +50,7 @@ const SDK_VERSIONS = {
   redirects: ['@wix/redirects'],
   data: ['@wix/data'],
   members: ['@wix/members'],
+  categories: ['@wix/categories'],
 };
 export const sdkStatus = {};
 async function loadMod(name, required = false) {
@@ -68,13 +69,13 @@ async function getClient() {
   clientPromise = (async () => {
     if (CONFIG.dataMode === 'fallback' || !CONFIG.clientId) return null;
     try {
-      const [sdk, stores, ecom, redir, data, mem] = await Promise.all([
-        loadMod('sdk', true), loadMod('stores', true), loadMod('ecom'), loadMod('redirects'), loadMod('data'), loadMod('members'),
+      const [sdk, stores, ecom, redir, data, mem, cats] = await Promise.all([
+        loadMod('sdk', true), loadMod('stores', true), loadMod('ecom'), loadMod('redirects'), loadMod('data'), loadMod('members'), loadMod('categories'),
       ]);
       const { createClient, OAuthStrategy } = sdk;
       let tokens = null; try { tokens = JSON.parse(localStorage.getItem(TOKENS_KEY) || 'null'); } catch (e) {}
       const c = createClient({
-        modules: { productsV3: stores.productsV3, readOnlyVariantsV3: stores.readOnlyVariantsV3, ...(ecom?.currentCart ? { currentCart: ecom.currentCart } : {}), ...(redir?.redirects ? { redirects: redir.redirects } : {}), ...(data?.items ? { items: data.items } : {}), ...(mem?.members ? { members: mem.members } : {}) },
+        modules: { productsV3: stores.productsV3, readOnlyVariantsV3: stores.readOnlyVariantsV3, ...(ecom?.currentCart ? { currentCart: ecom.currentCart } : {}), ...(redir?.redirects ? { redirects: redir.redirects } : {}), ...(data?.items ? { items: data.items } : {}), ...(mem?.members ? { members: mem.members } : {}), ...(cats?.categories ? { categories: cats.categories } : {}) },
         auth: OAuthStrategy({ clientId: CONFIG.clientId, tokens: tokens || undefined }),
       });
       if (!tokens) localStorage.setItem(TOKENS_KEY, JSON.stringify(await c.auth.generateVisitorTokens()));
@@ -99,6 +100,7 @@ function normV3(p) {
     id: p._id || p.id, slug: p.slug, name: p.name, sku: p.variantsInfo?.variants?.[0]?.sku || '',
     price: Number(p.actualPriceRange?.minValue?.amount ?? p.priceData?.price ?? 0),
     colour: colourOf(p.name), images: [...new Set(imgs)],
+    cats: [...new Set([p.mainCategoryId, ...(p.allCategoriesInfo?.categories || []).map(x => x._id || x.id), ...(p.directCategoriesInfo?.categories || []).map(x => x._id || x.id)].filter(Boolean))],
     description: descLines(p.plainDescription || p.description),
     modifiers: (p.modifiers || []).map(m => ({
       key: m.key || m._id, name: m.name, type: m.modifierRenderType, mandatory: !!m.mandatory,
@@ -122,16 +124,24 @@ function fallbackModifiers(cat) {
       choices: parts.map(v => m.type === 'SWATCH_CHOICES' ? { key: v.split(':')[1], name: v.split(':')[1], hex: v.split(':')[0], add: 0 } : { key: v, name: v, add: 0 }) };
   });
 }
-const normFallback = (p, mods) => ({ id: p.s, slug: p.h, name: p.n, sku: p.s, price: p.p, colour: p.c || colourOf(p.n), images: p.m || [], description: [], modifiers: mods, variantId: null, live: false });
+const normFallback = (p, mods) => ({ cats: ['welding-caps'], id: p.s, slug: p.h, name: p.n, sku: p.s, price: p.p, colour: p.c || colourOf(p.n), images: p.m || [], description: [], modifiers: mods, variantId: null, live: false });
 
 // ---------- catalogue ----------
-export async function listProducts() {
+const hiddenIds = () => new Set([...(CONFIG.hiddenProductIds || []), CONFIG.embroidery?.productId].filter(Boolean));
+export const isHidden = p => hiddenIds().has(p.id) || /^custom embroidery$/i.test((p.name || '').trim());
+export async function listProducts({ includeHidden = false } = {}) {
+  const all = await listAllProducts();
+  return includeHidden ? all : all.filter(p => !isHidden(p));
+}
+async function listAllProducts() {
   try { const c = JSON.parse(sessionStorage.getItem(LIST_CACHE_KEY) || 'null'); if (c) { mode = c.mode; return c.items; } } catch (e) {}
   let items = null;
   const c = await getClient();
   if (c) {
     try {
-      let res = await c.productsV3.queryProducts().limit(100).find();
+      let res;
+      try { res = await c.productsV3.queryProducts({ fields: ['ALL_CATEGORIES_INFO'] }).limit(100).find(); }
+      catch (e) { res = await c.productsV3.queryProducts().limit(100).find(); }
       const all = [...res.items];
       while (res.hasNext && res.hasNext()) { res = await res.next(); all.push(...res.items); }
       saveTokens(c);
@@ -292,6 +302,47 @@ export async function checkout() {
   location.href = redirectSession.fullUrl;
 }
 
+// ---------- categories ----------
+const norm = s => (s || '').toLowerCase().replace(/[^a-z]+/g, ' ').trim().split(' ').map(x => x.replace(/s$/, '')).join(' ');
+export const slugify = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+let catPromise = null;
+// [{ id, name, slug, count }] in CONFIG.categories order, only categories that have visible products
+export function listCategories() {
+  if (catPromise) return catPromise;
+  catPromise = (async () => {
+    const items = await listProducts();
+    const want = CONFIG.categories || [];
+    let wixCats = [];
+    const c = await getClient();
+    if (c?.categories && mode === 'live') {
+      try {
+        const tree = { treeReference: { appNamespace: '@wix/stores' } };
+        let res, lastErr;
+        for (const q of [() => c.categories.queryCategories(tree).eq('visible', true).limit(100).find(), () => c.categories.queryCategories(tree).ne('name', '').limit(100).find(), () => c.categories.queryCategories(tree).limit(100).find()]) {
+          try { res = await q(); break; } catch (e) { lastErr = e; }
+        }
+        if (!res) throw lastErr;
+        wixCats = [...res.items];
+        while (res.hasNext && res.hasNext()) { res = await res.next(); wixCats.push(...res.items); }
+        saveTokens(c);
+      } catch (e) { console.warn('[DBK] Category query failed:', e?.message || e); }
+    }
+    if (mode !== 'live') wixCats = [{ _id: 'welding-caps', name: 'Welding Caps', slug: 'welding-caps', visible: true }];
+    const out = want.map(name => {
+      const wc = wixCats.find(x => x.visible !== false && norm(x.name) === norm(name));
+      if (!wc) return null;
+      const id = wc._id || wc.id;
+      return { id, name: wc.name || name, slug: wc.slug || slugify(name), count: items.filter(p => p.cats?.includes(id)).length };
+    }).filter(x => x && x.count);
+    return out;
+  })();
+  return catPromise;
+}
+export async function builderCategoryId() {
+  const cats = await listCategories();
+  return cats.find(x => norm(x.name) === norm(CONFIG.builderCategory))?.id || null;
+}
+
 // ---------- embroidery ----------
 const FALLBACK_THREADS = ['Black', 'White', 'Red', 'Blue', 'Yellow', 'Orange', 'Green', 'Gray'];
 export async function getThreads() {
@@ -301,7 +352,7 @@ export async function getThreads() {
 // The Wix product that charges for embroidery. Set CONFIG.embroidery.productSlug, or it's found by name.
 export async function getEmbroideryProduct() {
   if (mode !== 'live') return null;
-  const items = await listProducts();
+  const items = await listProducts({ includeHidden: true });
   const { productId, productSlug } = CONFIG.embroidery || {};
   const cand = (productId && items.find(p => p.id === productId)) || (productSlug && items.find(p => p.slug === productSlug))
     || items.find(p => /embroider/i.test(p.name) && !/welding cap|beanie|skull|fabric|pattern/i.test(p.name));

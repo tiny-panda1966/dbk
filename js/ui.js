@@ -1,5 +1,5 @@
 // Shared chrome: header, mega menu, cart drawer, footer, toast.
-import { listProducts, getCart, setQty, checkout, getMode, getMember, IMG, money, COLOURS, FEATURED, findFeatured } from './wix.js';
+import { listProducts, listCategories, getCart, setQty, checkout, getMode, getMember, IMG, money, COLOURS, FEATURED, findFeatured } from './wix.js';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const productUrl = p => `product.html?slug=${encodeURIComponent(p.slug)}`;
@@ -19,6 +19,7 @@ function headerHtml() {
     <div class="hdr-row">
       <a href="index.html" class="logo"><img src="assets/dbk-logo.avif" alt="DBK Welding Caps"></a>
       <div class="hdr-actions">
+        <button type="button" class="search-btn" data-open-search aria-label="Search products"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Search</span></button>
         <a href="account.html" class="acct-btn" data-acct><span class="acct-ini" data-acct-ini>★</span><span class="acct-txt"><small data-acct-kicker>Members</small><strong data-acct-label>Join / Log in</strong></span></a>
         <button class="cart-btn" type="button" data-open-cart>Cart · <span data-cart-count>0</span></button>
       </div>
@@ -26,14 +27,15 @@ function headerHtml() {
     <nav class="main-nav">
       <a href="index.html#prints" data-mega-trigger>Welding caps <span aria-hidden="true">▾</span></a>
       <a href="product.html">Build your cap</a>
+      <span class="nav-cats" data-nav-cats></span>
     </nav>
     <div class="mega" hidden>
       <div class="hazard thin"></div>
       <div class="mega-inner">
         <div class="mega-col">
           <span class="kicker">Shop by colour</span>
-          <div class="mega-colours">${Object.entries(COLOURS).slice(0, 12).map(([k, h]) => `<a href="index.html?colour=${k}#prints"><span class="dot" style="background:${h}"></span>${k}</a>`).join('')}</div>
-          <a href="index.html#prints" class="mega-all">All welding caps</a>
+          <div class="mega-colours">${Object.entries(COLOURS).slice(0, 12).map(([k, h]) => `<a href="index.html?cat=welding-caps&colour=${k}#prints" data-cap-link data-colour="${k}"><span class="dot" style="background:${h}"></span>${k}</a>`).join('')}</div>
+          <a href="index.html?cat=welding-caps#prints" class="mega-all" data-cap-link>All welding caps</a>
         </div>
         <div class="mega-col wide">
           <span class="kicker">Popular prints</span>
@@ -43,6 +45,14 @@ function headerHtml() {
       </div>
     </div>
   </header>`;
+}
+
+function searchHtml() {
+  return `<div class="search-scrim" data-close-search hidden></div>
+  <div class="search-pop" role="dialog" aria-label="Search products" hidden>
+    <form class="search-form" data-search-form><input type="search" data-q placeholder="Search caps, fabrics, designs…" autocomplete="off" aria-label="Search products"><button type="button" class="link-btn" data-close-search>Close</button></form>
+    <div class="search-results" data-results></div>
+  </div>`;
 }
 
 function footerHtml() {
@@ -108,7 +118,25 @@ function closeCart() { document.querySelector('.drawer').hidden = true; document
 export async function mountChrome() {
   document.querySelector('[data-header]').innerHTML = headerHtml();
   document.querySelector('[data-footer]').innerHTML = footerHtml();
-  document.body.insertAdjacentHTML('beforeend', drawerHtml());
+  document.body.insertAdjacentHTML('beforeend', drawerHtml() + searchHtml());
+  // search overlay
+  const sPop = document.querySelector('.search-pop'), sScrim = document.querySelector('.search-scrim'), sQ = sPop.querySelector('[data-q]'), sRes = sPop.querySelector('[data-results]');
+  const openSearch = () => { sPop.hidden = sScrim.hidden = false; sQ.focus(); runSearch(); };
+  const closeSearch = () => { sPop.hidden = sScrim.hidden = true; };
+  async function runSearch() {
+    const terms = sQ.value.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!terms.length) { sRes.innerHTML = '<p class="note">Type a print, colour or product name.</p>'; return; }
+    const items = await listProducts();
+    const hits = items.filter(p => terms.every(t => `${p.name} ${p.sku} ${p.colour}`.toLowerCase().includes(t)));
+    sRes.innerHTML = hits.length ? hits.slice(0, 8).map(p => `<a href="${productUrl(p)}" class="search-hit"><span class="pick-img" style="background-image:url('${IMG(p.images[0], 120)}')"></span><span class="clamp2">${esc(p.name)}</span><span class="mono">${money(p.price)}</span></a>`).join('')
+      + `<a class="search-all" href="index.html?q=${encodeURIComponent(sQ.value.trim())}#prints">See all ${hits.length} result${hits.length === 1 ? '' : 's'} →</a>`
+      : '<p class="note">No products found. Try another word.</p>';
+  }
+  let st; sQ.oninput = () => { clearTimeout(st); st = setTimeout(runSearch, 150); };
+  sPop.querySelector('[data-search-form]').onsubmit = e => { e.preventDefault(); location.href = `index.html?q=${encodeURIComponent(sQ.value.trim())}#prints`; };
+  document.querySelectorAll('[data-open-search]').forEach(b => b.onclick = openSearch);
+  document.querySelectorAll('[data-close-search]').forEach(b => b.onclick = closeSearch);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSearch(); if (e.key === '/' && !/input|textarea/i.test(document.activeElement?.tagName || '')) { e.preventDefault(); openSearch(); } });
   document.querySelectorAll('[data-open-cart]').forEach(b => b.onclick = openCart);
   document.querySelectorAll('[data-close-cart]').forEach(b => b.onclick = closeCart);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCart(); });
@@ -125,6 +153,13 @@ export async function mountChrome() {
   hdr.addEventListener('mouseleave', () => { mega.hidden = true; });
   hdr.querySelectorAll('.main-nav a:not([data-mega-trigger])').forEach(a => a.addEventListener('mouseenter', () => mega.hidden = true));
 
+  listCategories().then(cats => {
+    const capCat = cats.find(c => /weld/i.test(c.name));
+    if (capCat) hdr.querySelectorAll('[data-cap-link]').forEach(a => a.href = `index.html?cat=${capCat.slug}${a.dataset.colour ? '&colour=' + a.dataset.colour : ''}#prints`);
+    hdr.querySelector('[data-nav-cats]').innerHTML = cats.filter(c => c !== capCat).map(c => `<a href="index.html?cat=${encodeURIComponent(c.slug)}#prints">${esc(c.name)}</a>`).join('');
+    hdr.querySelectorAll('[data-nav-cats] a').forEach(a => a.addEventListener('mouseenter', () => mega.hidden = true));
+    if (capCat) trig.href = `index.html?cat=${capCat.slug}#prints`;
+  }).catch(() => {});
   listProducts().then(items => {
     const picks = FEATURED.map(f => findFeatured(items, f)).filter(Boolean);
     (picks.length ? picks : items.slice(0, 4)).forEach(p => hdr.querySelector('[data-mega-picks]').insertAdjacentHTML('beforeend',

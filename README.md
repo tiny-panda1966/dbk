@@ -82,6 +82,12 @@ The CMS item ID is written on the order line as "Design ref". Each embroidered c
 
 Check `/diagnostics.html` → "Member function" should show `configured: true`.
 
+## Categories, search and hidden products
+- Category tabs on the homepage and links in the menu come from **Wix Stores categories**, shown in the order of `categories` in `js/config.js` (names matched loosely, so "Skull Caps" matches "Skulls Caps"). Categories with no visible products are skipped.
+- Only products in `builderCategory` ("Welding Caps") get the 3D builder and embroidery. Other products get a normal product page with photos and options.
+- Search: header button (or press `/`) for instant results; the homepage search filters the grid by name, SKU and colour.
+- **Custom Embroidery** (`embroidery.productId`) and anything in `hiddenProductIds` never appears in lists, search or menus, and its product page shows "not found". It's still added to the cart behind the scenes.
+
 ## Deploy
 Commit the contents of this folder to the repo root. Cloudflare Pages: framework preset **None**, build command empty, output directory `/`. Every push to `main` redeploys.
 
