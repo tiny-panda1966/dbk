@@ -1,4 +1,5 @@
 import { mountChrome, esc, toast, openCart } from './ui.js';
+import { getMember, getPrefs, savePrefs, getSurplus, login } from './wix.js';
 import { listProducts, getProduct, addToCart, linkLines, getEmbroideryProduct, getThreads, saveDesign, getMode, IMG, IMG_FIT, money, FEATURED, findFeatured } from './wix.js';
 import { createBuilder } from './builder.js';
 import { CONFIG } from './config.js';
@@ -56,6 +57,7 @@ root.innerHTML = `
         <span class="price mono" data-price></span>
         ${p.description.length ? `<div class="pdp-desc">${p.description.map(t => `<p>${esc(t)}</p>`).join('')}</div>` : ''}
       </div>
+      <div data-member-box></div>
       ${choiceMods.map((m, i) => `
       <section class="step" data-step="${esc(m.key)}">
         <div class="step-head"><span class="step-n">${String(i + 1).padStart(2, '0')}</span><h2>${esc(label(m))}</h2><span class="step-val" data-val></span></div>
@@ -67,6 +69,7 @@ root.innerHTML = `
         <p class="step-err" hidden>Choose a ${esc(label(m).toLowerCase())}</p>
       </section>`).join('')}
       <section class="step" data-emb-step></section>
+      <div data-instr></div>
       ${textMods.map(m => `
       <label class="field"><span><strong>${esc(m.name.replace(' (Please Specify)', ''))}</strong> <span class="muted">· optional</span></span>
         <textarea rows="2" maxlength="${m.text.max}" data-t="${esc(m.key)}" placeholder="${esc(m.text.title)}"></textarea></label>`).join('')}
@@ -141,7 +144,10 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
       if (tm) capTexts[tm.key] = [`Embroidery ref: ${tag}`, capTexts[tm.key]].filter(Boolean).join('\n').slice(0, tm.text.max);
       if (!(embProduct?.[e.mode === 'upload' ? 'logo' : 'text']) && textMods[0]) { const k = textMods[0].key; capTexts[k] = [capTexts[k], 'EMBROIDERY – ' + spec].filter(Boolean).join('\n').slice(0, textMods[0].text.max); }
     }
-    const fit = [...(tag ? [`Embroidery ref: ${tag}`] : []), ...choiceMods.map(m => `${label(m)}: ${chosen(m)?.name || '—'}`), ...textMods.filter(m => state.text[m.key]?.trim()).map(m => `${m.name.replace(' (Please Specify)', '')}: ${state.text[m.key].trim()}`)];
+    const instr = instrForOrder();
+    if (instr) { const tm = tagMod(); if (tm) capTexts[tm.key] = [capTexts[tm.key], instr.line].filter(Boolean).join('\n').slice(0, tm.text.max); }
+    if (instr?.changed) savePrefs({ instructions: instr.text }).then(x => { prefs = x; renderInstr(); }).catch(() => {});
+    const fit = [...(tag ? [`Embroidery ref: ${tag}`] : []), ...(instr ? [instr.line] : []), ...choiceMods.map(m => `${label(m)}: ${chosen(m)?.name || '—'}`), ...textMods.filter(m => state.text[m.key]?.trim()).map(m => `${m.name.replace(' (Please Specify)', '')}: ${state.text[m.key].trim()}`)];
     const capLine = await addToCart(p, { choices: state.sel, texts: capTexts, qty: state.qty, unit: unit() - embCost(), summary: fit });
     const choice = e && embProduct?.[e.mode === 'upload' ? 'logo' : 'text'];
     if (e && choice) {
@@ -159,4 +165,68 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
   } catch (err) { console.error(err); toast('Couldn’t add to cart. Please try again.'); }
   $$('[data-add]').forEach(x => x.disabled = false); sync();
 });
+
+// ---------- members: saved preferences + special instructions ----------
+const memberBox = $('[data-member-box]'), instrBox = $('[data-instr]');
+let member = null, prefs = null, surplusHit = null;
+const optNames = () => Object.fromEntries(choiceMods.map(m => [m.name, chosen(m)?.name || '']).filter(([, v]) => v));
+function applyPrefs(pr) {
+  choiceMods.forEach(m => { const want = pr.options?.[m.name]; const ch = want && m.choices.find(c => c.name === want); if (ch) state.sel[m.key] = ch.key; });
+  builder.applyPrefs({ font: pr.font, thread: pr.thread }); sync();
+}
+function renderMember(msg = '') {
+  if (!member) {
+    memberBox.innerHTML = `<div class="member-box guest"><div class="member-copy"><strong>Bought from us before?</strong><span>Members get their size, liner and bill preferences filled in automatically.</span></div><button type="button" class="btn btn-dark" data-login>Log in</button></div>`;
+    memberBox.querySelector('[data-login]').onclick = () => login(location.href).catch(e => toast(e.message));
+    return;
+  }
+  memberBox.innerHTML = `<div class="member-box">
+    <div class="member-head"><strong>Welcome back${member.name ? ', ' + esc(member.name) : ''}</strong><span class="tag">Member</span></div>
+    ${msg ? `<p class="member-msg">✓ ${esc(msg)}</p>` : ''}
+    ${surplusHit ? `<p class="member-msg">Member price: ${surplusHit.discountPercent}% off this cap, applied at checkout.</p>` : ''}
+    <div class="member-actions">
+      ${prefs ? '<button type="button" class="btn-sm" data-apply>Apply my saved preferences</button>' : ''}
+      <button type="button" class="btn-sm dark" data-save-prefs>Save these as my preferences</button>
+      ${msg ? '<button type="button" class="link-btn" data-clear>Clear</button>' : ''}
+    </div></div>`;
+  memberBox.querySelector('[data-apply]')?.addEventListener('click', () => { applyPrefs(prefs); renderMember('Loaded your saved preferences'); });
+  memberBox.querySelector('[data-clear]')?.addEventListener('click', () => { state.sel = {}; sync(); renderMember(); });
+  memberBox.querySelector('[data-save-prefs]').onclick = async e => {
+    e.target.disabled = true;
+    try { prefs = await savePrefs({ options: optNames(), ...builder.prefs(), instructions: currentInstr() }); toast('Saved to your member profile'); renderMember('Preferences saved'); renderInstr(); }
+    catch (err) { toast('Couldn’t save your preferences. Please try again.'); e.target.disabled = false; }
+  };
+}
+const currentInstr = () => (state.instr ?? prefs?.instructions ?? '').trim();
+const isConfirmed = t => !!(prefs && prefs.instructionsStatus === 'confirmed' && prefs.instructionsConfirmed && t === (prefs.instructions || '').trim());
+function instrForOrder() {
+  if (!member) return null;
+  const t = currentInstr(); if (!t) return null;
+  const ok = isConfirmed(t);
+  return { text: t, changed: t !== (prefs?.instructions || '').trim(), line: ok ? `Instructions (confirmed by DBK): ${prefs.instructionsConfirmed}` : `Instructions (awaiting DBK): ${t}` };
+}
+function renderConfirm() {
+  const box = instrBox.querySelector('[data-confirm]'); if (!box) return;
+  const t = currentInstr(), ok = isConfirmed(t);
+  box.hidden = !t; box.className = 'confirm' + (ok ? ' ok' : '');
+  box.innerHTML = `<div class="confirm-head"><span class="kicker">Confirmed by DBK</span><span class="tag${ok ? ' ok' : ''}">${ok ? 'Confirmed' : 'Awaiting DBK'}</span></div><p>${ok ? esc(prefs.instructionsConfirmed) : 'Kelly will read your instructions and confirm the details with you before your cap is made.'}</p>`;
+}
+function renderInstr() {
+  if (!member) { instrBox.innerHTML = ''; return; }
+  instrBox.innerHTML = `<label class="field"><span><strong>Special instructions</strong> <span class="muted">· in your own words, saved to your profile</span></span>
+    <textarea rows="2" maxlength="500" data-instr-t placeholder="e.g. Can you move the seam to the back or other side please"></textarea></label><div data-confirm></div>`;
+  const ta = instrBox.querySelector('[data-instr-t]'); ta.value = currentInstr();
+  ta.oninput = () => { state.instr = ta.value; renderConfirm(); };
+  renderConfirm();
+}
+renderMember();
+(async () => {
+  member = await getMember().catch(() => null);
+  if (!member) return renderMember();
+  prefs = await getPrefs();
+  try { surplusHit = (await getSurplus()).find(x => x.p.id === p.id) || null; } catch (e) {}
+  let msg = '';
+  if (prefs?.autoApply) { applyPrefs(prefs); msg = 'Your saved preferences were applied'; }
+  renderMember(msg); renderInstr();
+})();
 sync();

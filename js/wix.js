@@ -33,7 +33,7 @@ const descLines = html => {
 const colourOf = name => { const w = (name || '').split(/\s+/)[0].replace(/^Grey$/i, 'Gray'); return COLOURS[w] ? w : 'Other'; };
 
 // wix:image://v1/<mediaId>/name.jpg#…  |  https://static.wixstatic.com/media/<mediaId>…  |  { image: … } | { url: … }
-function mediaId(m) {
+export function mediaId(m) {
   if (!m) return '';
   if (typeof m === 'object') return mediaId(m.image?.url || m.image?.id || m.image || m.url || m.id || '');
   const a = /wix:image:\/\/v1\/([^/#]+)/.exec(m); if (a) return a[1];
@@ -46,14 +46,15 @@ async function getClient() {
   clientPromise = (async () => {
     if (CONFIG.dataMode === 'fallback' || !CONFIG.clientId) return null;
     try {
-      const [{ createClient, OAuthStrategy }, stores, ecom, redir, data] = await Promise.all([
+      const [{ createClient, OAuthStrategy }, stores, ecom, redir, data, mem] = await Promise.all([
         import('https://esm.sh/@wix/sdk'), import('https://esm.sh/@wix/stores'),
         import('https://esm.sh/@wix/ecom'), import('https://esm.sh/@wix/redirects'),
         import('https://esm.sh/@wix/data').catch(() => null),
+        import('https://esm.sh/@wix/members').catch(() => null),
       ]);
       let tokens = null; try { tokens = JSON.parse(localStorage.getItem(TOKENS_KEY) || 'null'); } catch (e) {}
       const c = createClient({
-        modules: { productsV3: stores.productsV3, readOnlyVariantsV3: stores.readOnlyVariantsV3, currentCart: ecom.currentCart, redirects: redir.redirects, ...(data?.items ? { items: data.items } : {}) },
+        modules: { productsV3: stores.productsV3, readOnlyVariantsV3: stores.readOnlyVariantsV3, currentCart: ecom.currentCart, redirects: redir.redirects, ...(data?.items ? { items: data.items } : {}), ...(mem?.members ? { members: mem.members } : {}) },
         auth: OAuthStrategy({ clientId: CONFIG.clientId, tokens: tokens || undefined }),
       });
       if (!tokens) localStorage.setItem(TOKENS_KEY, JSON.stringify(await c.auth.generateVisitorTokens()));
@@ -257,6 +258,8 @@ export async function checkout() {
     const orphans = (cart?.lineItems || []).filter(li => li.catalogReference?.catalogItemId === embId && !(links[li._id] && ids.has(links[li._id]))).map(li => li._id);
     if (orphans.length) await c.currentCart.removeLineItemsFromCurrentCart(orphans);
   }
+  const coupon = sessionStorage.getItem('dbk.memberCoupon');
+  if (coupon && c.auth.loggedIn?.()) { try { await c.currentCart.updateCurrentCart({ couponCode: coupon }); } catch (e) { console.info('[DBK] Member coupon not applied (no eligible caps in cart?)', e?.message || e); } }
   const { checkoutId } = await c.currentCart.createCheckoutFromCurrentCart({ channelType: 'WEB' });
   const origin = location.origin;
   const { redirectSession } = await c.redirects.createRedirectSession({
@@ -333,6 +336,81 @@ export async function _testSave() {
   return out;
 }
 
+// ---------- members (Wix-hosted login) ----------
+const OAUTH_KEY = 'dbk.oauth', MEMBER_KEY = 'dbk.member';
+export async function isLoggedIn() { const c = await getClient(); return !!(c && c.auth.loggedIn && c.auth.loggedIn()); }
+export async function login(returnTo = location.href) {
+  const c = await getClient(); if (!c) throw new Error('Login is available once the store is connected to Wix.');
+  const data = c.auth.generateOAuthData(location.origin + '/login-callback.html', returnTo);
+  localStorage.setItem(OAUTH_KEY, JSON.stringify(data));
+  const { authUrl } = await c.auth.getAuthUrl(data);
+  location.href = authUrl;
+}
+export async function finishLogin() {
+  const c = await getClient(); if (!c) throw new Error('Wix is not reachable.');
+  const { code, state, error, errorDescription } = c.auth.parseFromUrl();
+  if (error) throw new Error(errorDescription || error);
+  const data = JSON.parse(localStorage.getItem(OAUTH_KEY) || 'null');
+  if (!data) throw new Error('Login session expired. Please try again.');
+  const tokens = await c.auth.getMemberTokens(code, state, data);
+  c.auth.setTokens(tokens);
+  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+  localStorage.removeItem(OAUTH_KEY); sessionStorage.removeItem(MEMBER_KEY);
+  return data.originalUri || '/account.html';
+}
+export async function logout() {
+  const c = await getClient(); let url = location.origin + '/';
+  try { const r = await c.auth.logout(url); if (r?.logoutUrl) url = r.logoutUrl; } catch (e) {}
+  localStorage.removeItem(TOKENS_KEY); localStorage.removeItem(LINKS_KEY);
+  sessionStorage.removeItem(MEMBER_KEY); sessionStorage.removeItem('dbk.memberCoupon');
+  location.href = url;
+}
+async function memberToken() {
+  const c = await getClient(); if (!c?.auth.loggedIn?.()) return null;
+  try { await c.members?.getCurrentMember(); } catch (e) {} // refreshes the token if needed
+  saveTokens(c); return c.auth.getTokens()?.accessToken?.value || null;
+}
+export async function memberApi(action, body) {
+  const tok = await memberToken(); if (!tok) throw Object.assign(new Error('Not logged in'), { code: 401 });
+  const res = await fetch(`/api/member?action=${action}`, { method: body ? 'POST' : 'GET', headers: { 'x-member-token': tok, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(out.error || 'Request failed'), { code: res.status });
+  return out;
+}
+export async function getMember() {
+  if (!(await isLoggedIn())) return null;
+  try { const s = JSON.parse(sessionStorage.getItem(MEMBER_KEY) || 'null'); if (s) return s; } catch (e) {}
+  let m = await memberApi('me').catch(() => null);
+  if (!m) { // function not configured yet – fall back to the SDK for name/email
+    const c = await getClient();
+    try { const r = await c.members.getCurrentMember({ fieldsets: ['FULL'] }); const x = r.member || r; m = { id: x._id, email: x.loginEmail, name: x.contact?.firstName || x.profile?.nickname || '' }; } catch (e) { return null; }
+  }
+  sessionStorage.setItem(MEMBER_KEY, JSON.stringify(m)); return m;
+}
+export const getPrefs = () => memberApi('prefs').then(r => r.prefs).catch(() => null);
+export const savePrefs = p => memberApi('prefs', p).then(r => r.prefs);
+export const getOrders = () => memberApi('orders').then(r => r.orders);
+export async function getSurplus() {
+  const r = await memberApi('surplus');
+  if (r.coupon) sessionStorage.setItem('dbk.memberCoupon', r.coupon);
+  const items = await listProducts();
+  return r.items.map(s => ({ ...s, p: items.find(p => p.id === s.product || p.slug === s.product || p.name.toLowerCase() === s.product.toLowerCase()) })).filter(s => s.p);
+}
+// Re-adds every line of a past order (caps + embroidery) and re-links each embroidery to its cap by Embroidery ref.
+export async function reorder(order) {
+  const c = await getClient(); if (!c) throw new Error('Not connected');
+  const lineItems = order.lines.filter(l => l.catalogReference?.catalogItemId).map(l => ({ catalogReference: l.catalogReference, quantity: l.qty }));
+  if (!lineItems.length) throw new Error('Nothing to reorder');
+  const res = await c.currentCart.addToCurrentCart({ lineItems }); saveTokens(c);
+  const after = res?.cart?.lineItems || [], embId = CONFIG.embroidery?.productId;
+  const tagOf = li => (JSON.stringify(li.catalogReference?.options || {}).match(/Embroidery ref: ([A-Z0-9]+)/) || [])[1];
+  after.filter(li => li.catalogReference?.catalogItemId === embId).forEach(e => {
+    const t = tagOf(e), cap = t && after.find(li => li.catalogReference?.catalogItemId !== embId && tagOf(li) === t);
+    if (cap) linkLines(cap._id, e._id);
+  });
+  emit();
+}
+
 export function clearLocalCart() { writeLocal([]); emit(); }
 
 // For diagnostics.html
@@ -343,5 +421,6 @@ export async function _debug() {
   await listProducts();
   const emb = await getEmbroideryProduct().catch(e => ({ error: String(e) }));
   const fn = await fetch(CONFIG.embroidery?.designsEndpoint || '/api/embroidery').then(r => r.ok ? r.json() : { ok: false, status: r.status }).catch(e => ({ ok: false, error: String(e) }));
-  return { client: true, cms: !!c.items, uploadFunction: fn, embroidery: emb && { name: emb.product?.name, id: emb.product?.id, kind: emb.kind, text: emb.text, logo: emb.logo, note: emb.note && { name: emb.note.name, key: emb.note.text?.key }, variants: emb.variants, error: emb.error }, sample: res.items[0] || null };
+  const memberFn = await fetch('/api/member?action=ping').then(r => r.ok ? r.json() : { ok: false, status: r.status }).catch(e => ({ ok: false, error: String(e) }));
+  return { client: true, cms: !!c.items, membersModule: !!c.members, loggedIn: !!c.auth.loggedIn?.(), uploadFunction: fn, memberFunction: memberFn, embroidery: emb && { name: emb.product?.name, id: emb.product?.id, kind: emb.kind, text: emb.text, logo: emb.logo, note: emb.note && { name: emb.note.name, key: emb.note.text?.key }, variants: emb.variants, error: emb.error }, sample: res.items[0] || null };
 }

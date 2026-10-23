@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signing you in – DBK Welding Caps</title>
+<meta name="robots" content="noindex, nofollow">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@900&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+<main class="pad" style="max-width:640px">
+  <h1 class="display" style="font-size:56px" id="t">Signing you in…</h1>
+  <p class="muted" id="m"></p>
+</main>
+<script type="module">
+  import { finishLogin } from './js/wix.js';
+  try { location.replace(await finishLogin()); }
+  catch (e) {
+    document.getElementById('t').textContent = 'Couldn’t sign you in';
+    document.getElementById('m').innerHTML = (e.message || 'Please try again.') + ' <a href="account.html" style="text-decoration:underline">Back to log in</a>';
+  }
+</script>
+</body>
+</html>

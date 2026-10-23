@@ -19,7 +19,7 @@ const FONT_DEFS = [
   ['Playfair Display', 'Classic', 700], ['Cinzel', 'Classic', 700], ['Abril Fatface', 'Classic'],
   ['Permanent Marker', 'Fun'], ['Bangers', 'Fun'], ['Fredoka', 'Fun', 600],
 ];
-const FONTS = FONT_DEFS.map(([name, cat, weight]) => ({ name, cat, weight: weight || 400, family: `'${name}', ${cat === 'Script' ? 'cursive' : 'sans-serif'}` }));
+export const FONTS = FONT_DEFS.map(([name, cat, weight]) => ({ name, cat, weight: weight || 400, family: `'${name}', ${cat === 'Script' ? 'cursive' : 'sans-serif'}` }));
 const CATS = ['All', 'Script', 'Varsity', 'Western', 'Block', 'Classic', 'Fun'];
 const VIEWS = [['front', 'Front'], ['right', 'Right'], ['back', 'Back'], ['left', 'Left'], ['top', 'Top']];
 const LOOKS = [['white', 'White'], ['colour', 'Colour'], ['print', 'Print']];
@@ -187,6 +187,12 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
   return {
     setOptions({ liner, deep }) { if (liner) opt.liner = liner; opt.deep = !!deep; syncViewer(); },
     active: () => !!active(),
+    prefs: () => ({ font: st.font, thread: st.thread }),
+    applyPrefs({ font, thread } = {}) {
+      if (font && FONTS.some(f => f.name === font)) st.font = font;
+      if (thread && threads.includes(thread)) st.thread = thread;
+      sync();
+    },
     mode: () => st.mode,
     state: () => st,
     async snapshot() {

@@ -1,5 +1,5 @@
 // Shared chrome: header, mega menu, cart drawer, footer, toast.
-import { listProducts, getCart, setQty, checkout, getMode, IMG, money, COLOURS, FEATURED, findFeatured } from './wix.js';
+import { listProducts, getCart, setQty, checkout, getMode, getMember, IMG, money, COLOURS, FEATURED, findFeatured } from './wix.js';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const productUrl = p => `product.html?slug=${encodeURIComponent(p.slug)}`;
@@ -18,7 +18,10 @@ function headerHtml() {
   <header class="site-header">
     <div class="hdr-row">
       <a href="index.html" class="logo"><img src="assets/dbk-logo.avif" alt="DBK Welding Caps"></a>
-      <button class="cart-btn" type="button" data-open-cart>Cart · <span data-cart-count>0</span></button>
+      <div class="hdr-actions">
+        <a href="account.html" class="acct-btn" data-acct><span class="acct-ini" data-acct-ini>★</span><span class="acct-txt"><small data-acct-kicker>Members</small><strong data-acct-label>Join / Log in</strong></span></a>
+        <button class="cart-btn" type="button" data-open-cart>Cart · <span data-cart-count>0</span></button>
+      </div>
     </div>
     <nav class="main-nav">
       <a href="index.html#prints" data-mega-trigger>Welding caps <span aria-hidden="true">▾</span></a>
@@ -128,6 +131,13 @@ export async function mountChrome() {
       `<a href="${productUrl(p)}"><span class="pick-img" style="background-image:url('${IMG(p.images[0], 300)}')"></span><span class="clamp2">${esc(p.name.replace(' Welding Cap', ''))}</span><span class="mono">${money(p.price)}</span></a>`));
   }).catch(() => {});
   renderCart();
+  getMember().then(m => {
+    if (!m) return;
+    const a = document.querySelector('[data-acct]'); a.classList.add('member');
+    document.querySelector('[data-acct-ini]').textContent = (m.name || m.email || '?')[0].toUpperCase();
+    document.querySelector('[data-acct-kicker]').textContent = 'Member';
+    document.querySelector('[data-acct-label]').textContent = m.name ? 'Hi, ' + m.name : 'My account';
+  }).catch(() => {});
 }
 
 // Scroll-in reveal (respects reduced motion)

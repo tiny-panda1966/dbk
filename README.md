@@ -7,7 +7,7 @@ Static storefront for DBK – Welding Caps, hosted on Cloudflare Pages and conne
 - [x] Product page with every Wix Stores option (TEXT / SWATCH / FREE_TEXT modifiers), price incl. option surcharges
 - [x] Cart (Wix eCommerce current cart) and Wix-hosted checkout redirect
 - [x] Phase 2 – 3D cap builder + embroidery (text, Google Fonts, upload, drag placement, captured preview on the order)
-- [ ] Phase 3 – Members (login, saved preferences, special instructions with DBK confirmation, order history, reorder, perks)
+- [x] Phase 3 – Members (Wix login, saved preferences, special instructions with DBK confirmation, order history + reorder, surplus caps)
 
 ## Files
 | Path | What |
@@ -19,6 +19,8 @@ Static storefront for DBK – Welding Caps, hosted on Cloudflare Pages and conne
 | `js/home.js`, `js/product.js` | Page logic |
 | `js/builder.js`, `js/cap3d.js`, `vendor/three.module.min.js` | 3D cap builder and embroidery designer |
 | `data/catalog.json` | Exported catalogue, used only if Wix can't be reached |
+| `account.html`, `js/account.js`, `login-callback.html` | Member account + Wix login return page |
+| `functions/api/member.js` | Member data (preferences, orders, surplus) – verifies the member with Wix on every call |
 | `diagnostics.html` | Shows whether the site is LIVE or using the fallback |
 
 ## One-time Wix setup (Tiny Panda Wix dashboard)
@@ -57,6 +59,28 @@ If no embroidery product exists, the spec is added to the cap's first notes fiel
 The CMS item ID is written on the order line as "Design ref". Each embroidered cap also gets a short **Embroidery ref** (e.g. `K7F2QX`) in its notes field and on its embroidery line, so it's always a separate cart line and Kelly can match cap ⇄ embroidery ⇄ CMS item. If the function isn't configured, the site saves the text fields only (no images). That fallback needs *Add content – Anyone* on the collection.
 
 `/diagnostics.html` shows whether the embroidery product and CMS module were found.
+
+## Phase 3 setup – members
+**1. Login.** Members app installed ✔. In the Headless OAuth app add the redirect URL **`https://dbk-brk.pages.dev/login-callback.html`** (and the live domain later). Login uses the Wix-hosted page; set sign-up to email + password in Members settings.
+
+**2. Wix API key permissions.** The key in `WIX_API_KEY` also needs **Members (read)** and **eCommerce – Orders (read)**, on top of Wix Media + Wix Data.
+
+**3. CMS collection `memberPreferences`.** Permissions: all **Admin** (only the server function reads/writes). One item per member:
+| Field | Type | Notes |
+| --- | --- | --- |
+| memberId, email | Text | set by the site |
+| capSize, linerColour, linerType, capLength, batting, billSize | Text | choice names, e.g. `7 1/4"`, `Black Liner` |
+| font, thread | Text | embroidery font + thread colour |
+| autoApply | Boolean | fill preferences in automatically |
+| instructions | Text | customer's own words |
+| instructionsConfirmed | Text | **Kelly writes this** – the clear wording used on every order |
+| instructionsStatus | Text | `awaiting` (set by site when the customer changes their words) → Kelly sets `confirmed` |
+
+**4. CMS collection `memberSurplus`** (Kelly's list). Permissions: Admin. Fields: `product` (Text – product name, slug or ID), `discountPercent` (Number, e.g. 15), `active` (Boolean), `sortOrder` (Number).
+
+**5. Member discount at checkout (optional).** Create a Wix coupon limited to the surplus caps (e.g. 15%, one use per customer) and put its code in Cloudflare variable `MEMBER_COUPON`. It's only sent to logged-in members and applied automatically at checkout.
+
+Check `/diagnostics.html` → "Member function" should show `configured: true`.
 
 ## Deploy
 Commit the contents of this folder to the repo root. Cloudflare Pages: framework preset **None**, build command empty, output directory `/`. Every push to `main` redeploys.
