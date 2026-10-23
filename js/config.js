@@ -17,7 +17,7 @@ export const CONFIG = {
   contact: {
     phone: '979-922-5053', email: 'dbkweldingcaps@outlook.com',
     // Wix Forms: create a form in the dashboard (Name, Email, Phone, Message), then paste its form ID and field keys here
-    formId: '',
+    formId: '46c6780c-460a-45c7-86e1-bc2b8d8a822c',
     fields: { name: 'first_name', email: 'email', phone: 'phone', message: 'message' },
   },
   // Wix CMS collection for FAQs (fields: category, question, answer, sortOrder; Read permission: Anyone)
