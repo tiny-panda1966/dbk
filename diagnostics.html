@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DBK – Wix connection check</title>
+<meta name="robots" content="noindex, nofollow">
+<style>body{font:15px/1.5 system-ui,sans-serif;margin:32px;color:#1d1d1f}h1{margin:0 0 16px}.ok{color:#1f6b33}.bad{color:#b3261e}pre{background:#f6f5f3;padding:16px;overflow:auto;max-height:60vh;font-size:12px}</style>
+</head>
+<body>
+<h1>Wix Headless connection check</h1>
+<p id="status">Checking…</p>
+<pre id="out"></pre>
+<script type="module">
+  import { CONFIG } from './js/config.js';
+  import { _debug, listProducts, getMode } from './js/wix.js';
+  const s = document.getElementById('status'), out = document.getElementById('out');
+  sessionStorage.removeItem('dbk.products.v1');
+  try {
+    const d = await _debug();
+    const items = await listProducts();
+    const live = getMode() === 'live';
+    s.innerHTML = `<b class="${live ? 'ok' : 'bad'}">${live ? 'LIVE – connected to Wix Stores' : 'FALLBACK – using the exported catalogue'}</b> · ${items.length} products · client id ${CONFIG.clientId.slice(0, 8)}… · origin ${location.origin}`;
+    out.textContent = JSON.stringify(d.sample || d, null, 2);
+  } catch (e) {
+    s.innerHTML = `<b class="bad">Error</b>: ${e.message || e}`;
+    out.textContent = String(e.stack || e);
+  }
+</script>
+</body>
+</html>

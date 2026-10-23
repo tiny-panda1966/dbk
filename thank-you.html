@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thank you – DBK Welding Caps</title>
+<meta name="robots" content="noindex, nofollow">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
+<script type="module">
+  import { mountChrome } from './js/ui.js';
+  import { clearLocalCart } from './js/wix.js';
+  await mountChrome();
+  clearLocalCart();
+  const id = new URLSearchParams(location.search).get('orderId');
+  if (id) document.querySelector('[data-order]').textContent = `Order reference: ${id}`;
+</script>
+</head>
+<body>
+<div data-header></div>
+<main class="pad" style="max-width:760px">
+  <span class="kicker">Order placed</span>
+  <h1 class="display" style="font-size:clamp(56px,8vw,104px);margin:12px 0 20px">Thank you.</h1>
+  <p style="font-size:19px;line-height:1.55">Your cap is now in Kelly’s queue. You’ll get an order confirmation by email, and Kelly will be in touch if anything in your order needs checking before it’s made.</p>
+  <p class="mono muted" data-order></p>
+  <p style="margin-top:28px"><a href="index.html#prints" class="btn btn-dark">Keep shopping</a></p>
+</main>
+<div data-footer></div>
+</body>
+</html>

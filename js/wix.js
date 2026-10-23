@@ -1,0 +1,212 @@
+// Data layer: Wix Headless (Stores Catalog V3 + eCommerce) with a fallback to the exported catalogue.
+// Every page talks to this module only, so the rest of the site doesn't care where data comes from.
+import { CONFIG } from './config.js';
+
+const TOKENS_KEY = 'dbk.wixTokens';
+const LOCAL_CART_KEY = 'dbk.localCart';
+const LIST_CACHE_KEY = 'dbk.products.v1';
+
+let clientPromise = null;
+let mode = null; // 'live' | 'fallback'
+
+export const IMG = (id, w = 600) => id ? `https://static.wixstatic.com/media/${id}/v1/fill/w_${w},h_${w},al_c,q_80/${id}` : '';
+export const IMG_FIT = (id, w = 1000) => id ? `https://static.wixstatic.com/media/${id}/v1/fit/w_${w},h_${w},q_85/${id}` : '';
+export const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: CONFIG.currency }).format(Number(n) || 0);
+export const getMode = () => mode;
+// Featured caps, matched by SKU (exported catalogue) or name (live – visitors don't receive SKUs).
+export const FEATURED = [['YELBLUFLAMCAP', 'Yellow Blue Flame Welding Cap'], ['BLAZTECCAP', 'Black Aztec Welding Cap'], ['BLAMAZGRACAP', 'Black Amazing Grace Welding Cap'], ['BLBANDCAP', 'Black Bandana Welding Cap']];
+export const findFeatured = (items, [sku, name]) => items.find(p => p.sku === sku) || items.find(p => p.name?.trim().toLowerCase() === name.toLowerCase());
+
+export const COLOURS = { Black: '#1b1b1c', Blue: '#2753c8', Brown: '#6b4a2e', Cream: '#efe4c8', Gray: '#8e8d8a', Green: '#1f8a3b', Orange: '#e8641c', Pink: '#e678a6', Purple: '#6a3d9a', Red: '#c62a22', White: '#f4f4f1', Yellow: '#f2c200', Peach: '#f3b58a', Maroon: '#6b1f2a' };
+// Wix returns descriptions as HTML; keep only non-empty paragraphs as plain text.
+const descLines = html => {
+  if (!html) return [];
+  const doc = new DOMParser().parseFromString(String(html), 'text/html');
+  const blocks = [...doc.body.querySelectorAll('p, li, h1, h2, h3, h4')];
+  const parts = (blocks.length ? blocks : [doc.body]).map(n => n.textContent.replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ').replace(/\s+/g, ' ').trim());
+  return parts.filter(Boolean);
+};
+const colourOf = name => { const w = (name || '').split(/\s+/)[0].replace(/^Grey$/i, 'Gray'); return COLOURS[w] ? w : 'Other'; };
+
+// wix:image://v1/<mediaId>/name.jpg#…  |  https://static.wixstatic.com/media/<mediaId>…  |  { image: … } | { url: … }
+function mediaId(m) {
+  if (!m) return '';
+  if (typeof m === 'object') return mediaId(m.image?.url || m.image?.id || m.image || m.url || m.id || '');
+  const a = /wix:image:\/\/v1\/([^/#]+)/.exec(m); if (a) return a[1];
+  const b = /static\.wixstatic\.com\/media\/([^/?#]+)/.exec(m); if (b) return b[1];
+  return /~mv2|\.(jpe?g|png|webp)$/i.test(m) ? m : '';
+}
+
+async function getClient() {
+  if (clientPromise) return clientPromise;
+  clientPromise = (async () => {
+    if (CONFIG.dataMode === 'fallback' || !CONFIG.clientId) return null;
+    try {
+      const [{ createClient, OAuthStrategy }, stores, ecom, redir] = await Promise.all([
+        import('https://esm.sh/@wix/sdk'), import('https://esm.sh/@wix/stores'),
+        import('https://esm.sh/@wix/ecom'), import('https://esm.sh/@wix/redirects'),
+      ]);
+      let tokens = null; try { tokens = JSON.parse(localStorage.getItem(TOKENS_KEY) || 'null'); } catch (e) {}
+      const c = createClient({
+        modules: { productsV3: stores.productsV3, readOnlyVariantsV3: stores.readOnlyVariantsV3, currentCart: ecom.currentCart, redirects: redir.redirects },
+        auth: OAuthStrategy({ clientId: CONFIG.clientId, tokens: tokens || undefined }),
+      });
+      if (!tokens) localStorage.setItem(TOKENS_KEY, JSON.stringify(await c.auth.generateVisitorTokens()));
+      return c;
+    } catch (e) {
+      console.warn('[DBK] Wix Headless unavailable:', e);
+      if (CONFIG.dataMode === 'live') throw e;
+      return null;
+    }
+  })();
+  return clientPromise;
+}
+const saveTokens = c => { try { localStorage.setItem(TOKENS_KEY, JSON.stringify(c.auth.getTokens())); } catch (e) {} };
+
+// ---------- normalised product model ----------
+// { id, slug, name, sku, price, colour, images[], modifiers[], variantId, live }
+// modifier: { key, name, type: TEXT_CHOICES|SWATCH_CHOICES|FREE_TEXT, mandatory, choices[{ key, name, hex, add }], text{ key, title, max, add } }
+function normV3(p) {
+  const items = p.media?.itemsInfo?.items || [];
+  const imgs = [mediaId(p.media?.main), ...items.map(mediaId)].filter(Boolean);
+  return {
+    id: p._id || p.id, slug: p.slug, name: p.name, sku: p.variantsInfo?.variants?.[0]?.sku || '',
+    price: Number(p.actualPriceRange?.minValue?.amount ?? p.priceData?.price ?? 0),
+    colour: colourOf(p.name), images: [...new Set(imgs)],
+    description: descLines(p.plainDescription || p.description),
+    modifiers: (p.modifiers || []).map(m => ({
+      key: m.key || m._id, name: m.name, type: m.modifierRenderType, mandatory: !!m.mandatory,
+      choices: (m.choicesSettings?.choices || []).map(ch => ({ key: ch.key || ch.choiceId, name: ch.name, hex: ch.colorCode, add: Number(ch.addedPrice || 0) })),
+      text: m.freeTextSettings ? { key: m.freeTextSettings.key || m.key, title: m.freeTextSettings.title || m.name, max: m.freeTextSettings.maxCharCount || 500, add: Number(m.freeTextSettings.defaultAddedPrice || 0) } : null,
+    })),
+    variantId: p.variantsInfo?.variants?.[0]?._id || null, live: true,
+  };
+}
+
+let fallbackCat = null;
+async function loadFallback() {
+  if (!fallbackCat) fallbackCat = await fetch('data/catalog.json').then(r => r.json());
+  return fallbackCat;
+}
+function fallbackModifiers(cat) {
+  return Object.entries(cat.modifiers).map(([name, m]) => {
+    const parts = m.choices.split(';').filter(Boolean);
+    if (m.type === 'FREE_TEXT') return { key: name, name, type: 'FREE_TEXT', mandatory: false, choices: [], text: { key: name, title: m.choices, max: 500, add: 0 } };
+    return { key: name, name, type: m.type, mandatory: true, text: null,
+      choices: parts.map(v => m.type === 'SWATCH_CHOICES' ? { key: v.split(':')[1], name: v.split(':')[1], hex: v.split(':')[0], add: 0 } : { key: v, name: v, add: 0 }) };
+  });
+}
+const normFallback = (p, mods) => ({ id: p.s, slug: p.h, name: p.n, sku: p.s, price: p.p, colour: p.c || colourOf(p.n), images: p.m || [], description: [], modifiers: mods, variantId: null, live: false });
+
+// ---------- catalogue ----------
+export async function listProducts() {
+  try { const c = JSON.parse(sessionStorage.getItem(LIST_CACHE_KEY) || 'null'); if (c) { mode = c.mode; return c.items; } } catch (e) {}
+  let items = null;
+  const c = await getClient();
+  if (c) {
+    try {
+      let res = await c.productsV3.queryProducts().limit(100).find();
+      const all = [...res.items];
+      while (res.hasNext && res.hasNext()) { res = await res.next(); all.push(...res.items); }
+      saveTokens(c);
+      if (all.length) { items = all.map(normV3); mode = 'live'; }
+    } catch (e) { console.warn('[DBK] Live product query failed:', e); if (CONFIG.dataMode === 'live') throw e; }
+  }
+  if (!items) {
+    const cat = await loadFallback(), mods = fallbackModifiers(cat);
+    items = cat.products.map(p => normFallback(p, mods)); mode = 'fallback';
+  }
+  try { sessionStorage.setItem(LIST_CACHE_KEY, JSON.stringify({ mode, items: items.map(p => ({ ...p, modifiers: [] })) })); } catch (e) {}
+  return items;
+}
+
+export async function getProduct(slug) {
+  const c = await getClient();
+  if (c) {
+    try {
+      const res = await c.productsV3.getProductBySlug(slug, { fields: ['MEDIA_ITEMS_INFO', 'PLAIN_DESCRIPTION', 'CURRENCY'] });
+      const p = normV3(res.product || res);
+      if (!p.variantId) {
+        try {
+          const v = await c.readOnlyVariantsV3.queryVariants().eq('productData.productId', p.id).limit(1).find();
+          p.variantId = v.items?.[0]?.variantId || v.items?.[0]?._id || null;
+          if (!p.sku) p.sku = v.items?.[0]?.sku || '';
+        } catch (e) { console.warn('[DBK] Variant lookup failed:', e); }
+      }
+      saveTokens(c); mode = 'live'; return p;
+    } catch (e) { console.warn('[DBK] Live product fetch failed:', e); if (CONFIG.dataMode === 'live') throw e; }
+  }
+  const cat = await loadFallback(), mods = fallbackModifiers(cat);
+  const raw = cat.products.find(p => p.h === slug) || cat.products.find(p => p.s === slug);
+  mode = 'fallback';
+  return raw ? normFallback(raw, mods) : null;
+}
+
+// ---------- cart ----------
+// line: { id, name, qty, unit, img, lines[] }
+const readLocal = () => { try { return JSON.parse(localStorage.getItem(LOCAL_CART_KEY) || '[]'); } catch (e) { return []; } };
+const writeLocal = c => localStorage.setItem(LOCAL_CART_KEY, JSON.stringify(c));
+const emit = () => window.dispatchEvent(new CustomEvent('dbk:cart'));
+
+export async function getCart() {
+  const c = await getClient();
+  if (c && mode !== 'fallback') {
+    try {
+      const cart = await c.currentCart.getCurrentCart(); saveTokens(c);
+      return (cart.lineItems || []).map(li => ({
+        id: li._id, name: li.productName?.translated || li.productName?.original || 'Cap', qty: li.quantity,
+        unit: Number(li.price?.convertedAmount ?? li.price?.amount ?? 0), img: mediaId(li.image),
+        lines: (li.descriptionLines || []).map(d => `${d.name?.translated || d.name?.original || ''}: ${d.plainText?.translated || d.plainText?.original || d.colorInfo?.translated || d.colorInfo?.original || ''}`),
+      }));
+    } catch (e) { if (String(e?.message || e).match(/404|not ?found|OWNED_CART_NOT_FOUND/i)) return []; console.warn('[DBK] Cart fetch failed:', e); return []; }
+  }
+  return readLocal();
+}
+
+export async function addToCart(product, { choices = {}, texts = {}, qty = 1, unit, summary = [] }) {
+  const c = await getClient();
+  if (c && product.live) {
+    const options = { options: choices };
+    if (product.variantId) options.variantId = product.variantId;
+    const ct = Object.fromEntries(Object.entries(texts).filter(([, v]) => v && v.trim()));
+    if (Object.keys(ct).length) options.customTextFields = ct;
+    await c.currentCart.addToCurrentCart({ lineItems: [{ catalogReference: { appId: CONFIG.storesAppId, catalogItemId: product.id, options }, quantity: qty }] });
+    saveTokens(c); emit(); return;
+  }
+  const cart = readLocal();
+  cart.push({ id: 'l' + Date.now(), name: product.name, qty, unit, img: product.images[0], lines: summary });
+  writeLocal(cart); emit();
+}
+
+export async function setQty(id, qty) {
+  const c = await getClient();
+  if (c && mode === 'live') {
+    if (qty < 1) await c.currentCart.removeLineItemsFromCurrentCart([id]);
+    else await c.currentCart.updateCurrentCartLineItemQuantity([{ _id: id, quantity: qty }]);
+    saveTokens(c); emit(); return;
+  }
+  writeLocal(readLocal().map(l => l.id === id ? { ...l, qty } : l).filter(l => l.qty > 0)); emit();
+}
+
+export async function checkout() {
+  const c = await getClient();
+  if (!c || mode !== 'live') throw new Error('Checkout opens once the store is connected to Wix. This preview is using the exported catalogue.');
+  const { checkoutId } = await c.currentCart.createCheckoutFromCurrentCart({ channelType: 'WEB' });
+  const origin = location.origin;
+  const { redirectSession } = await c.redirects.createRedirectSession({
+    ecomCheckout: { checkoutId },
+    callbacks: { postFlowUrl: origin + '/', thankYouPageUrl: origin + CONFIG.thankYouPath, cartPageUrl: origin + '/' },
+  });
+  saveTokens(c);
+  location.href = redirectSession.fullUrl;
+}
+
+export function clearLocalCart() { writeLocal([]); emit(); }
+
+// For diagnostics.html
+export async function _debug() {
+  const c = await getClient();
+  if (!c) return { client: false };
+  const res = await c.productsV3.queryProducts().limit(1).find();
+  return { client: true, sample: res.items[0] || null };
+}
