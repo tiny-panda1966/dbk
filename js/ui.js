@@ -1,4 +1,5 @@
 // Shared chrome: header, mega menu, cart drawer, footer, toast.
+import { CONFIG } from './config.js';
 import { listProducts, listCategories, getCart, setQty, checkout, getMode, getMember, IMG, money, COLOURS, FEATURED, findFeatured } from './wix.js';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -78,10 +79,46 @@ function searchHtml() {
   </div>`;
 }
 
+const ICONS = {
+  facebook: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M13.5 22v-8h2.7l.4-3.2h-3.1V8.8c0-.9.3-1.5 1.6-1.5h1.7V4.4c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.5-4 4.1v2.4H7.7V14h2.7v8z"/></svg>',
+  instagram: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></svg>',
+};
 function footerHtml() {
-  return `<footer class="site-footer"><div><img src="assets/dbk-logo.avif" alt="" class="foot-logo"><p>Handmade welding caps by DBK – Welding Caps.</p></div>
-  <div class="foot-meta"><a href="mailto:dbkweldingcaps@outlook.com">dbkweldingcaps@outlook.com</a><span>Text: 979 922 5053</span><span>© ${new Date().getFullYear()} DBK – Welding Caps</span></div></footer>`;
+  const { phone, email } = CONFIG.contact || {};
+  const social = Object.entries(CONFIG.social || {}).filter(([, url]) => url);
+  return `<footer class="site-footer">
+    <div class="foot-brand"><img src="assets/dbk-logo.avif" alt="DBK Welding Caps" class="foot-logo"><p>Handmade welding caps by DBK – Welding Caps.</p>
+      ${social.length ? `<div class="foot-social">${social.map(([k, url]) => `<a href="${esc(url)}" target="_blank" rel="noopener" aria-label="${k[0].toUpperCase() + k.slice(1)}">${ICONS[k] || k}</a>`).join('')}</div>` : ''}</div>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="index.html#prints">Shop</a><a href="product.html">Build your cap</a><a href="account.html">Members</a>
+      <a href="faq.html">FAQs</a><a href="contact.html">Contact</a><button type="button" class="link-btn" data-open-policy>Shipping &amp; Returns</button>
+    </nav>
+    <div class="foot-meta"><a href="mailto:${esc(email)}">${esc(email)}</a><span>Phone / text: ${esc(phone)}</span><span>© ${new Date().getFullYear()} DBK – Welding Caps</span></div>
+  </footer>`;
 }
+function policyHtml() {
+  return `<div class="drawer-scrim" data-close-policy hidden></div>
+  <div class="policy" role="dialog" aria-modal="true" aria-labelledby="policy-h" hidden>
+    <div class="policy-head"><h2 id="policy-h">Shipping &amp; Returns</h2><button type="button" class="link-btn" data-close-policy>Close</button></div>
+    <div class="policy-body">
+      <h3>Shipping Policy</h3>
+      <p>At DBK Welding Caps, we prioritize your satisfaction and timely delivery of our high-quality welding caps. Our shipping methods are designed to ensure that your order arrives safely and on time. We offer a variety of shipping options at competitive rates to meet your needs.</p>
+      <p>For more details on our shipping process and packaging, please feel free to reach out!</p>
+      <h3>Return &amp; Exchange Policy</h3>
+      <p>We understand that sometimes purchases don’t meet expectations. If you’re not completely satisfied with your welding cap, our return and exchange policy is here to help. We offer a straightforward process for returns and exchanges to ensure that our customers can shop with confidence.</p>
+      <p>If you have any questions, our team is ready to assist you!</p>
+      <p>Once you've made the decision to return your item, we will send you a free return shipping label (for 1 or all purchased items) by email to you directly. Once the return parcel is received at our return PO Box, the item/s will be inspected before confirmation of a refund is issued.</p>
+      <p>Please be mindful of the following:</p>
+      <ul><li>The refund will be issued back to the original payment method used at time of original purchase &amp; may take up to 7-10 days depending on your service provider</li>
+      <li>However, if you opted for in-store credit as your preferred return option, the funds will be available within 1-2 days of receiving the returned goods</li></ul>
+      <h3>Postal Address</h3>
+      <p>DBK Welding Caps | Attn: Kelly<br>PO Box 161, 16043 Eagle Drive, Mont Belvieu, TX 77580</p>
+    </div>
+    <div class="policy-foot"><a href="contact.html" class="btn btn-dark">Contact us</a></div>
+  </div>`;
+}
+export function openPolicy() { document.querySelector('.policy').hidden = false; document.querySelector('[data-close-policy].drawer-scrim').hidden = false; document.body.classList.add('no-scroll'); document.querySelector('.policy [data-close-policy]').focus(); }
+function closePolicy() { const p = document.querySelector('.policy'); if (!p || p.hidden) return; p.hidden = true; document.querySelector('[data-close-policy].drawer-scrim').hidden = true; document.body.classList.remove('no-scroll'); if (location.hash === '#shipping-returns') history.replaceState(null, '', location.pathname + location.search); }
 
 function drawerHtml() {
   return `<div class="drawer-scrim" data-close-cart hidden></div>
@@ -141,7 +178,11 @@ function closeCart() { document.querySelector('.drawer').hidden = true; document
 export async function mountChrome() {
   document.querySelector('[data-header]').innerHTML = headerHtml();
   document.querySelector('[data-footer]').innerHTML = footerHtml();
-  document.body.insertAdjacentHTML('beforeend', drawerHtml() + searchHtml());
+  document.body.insertAdjacentHTML('beforeend', drawerHtml() + searchHtml() + policyHtml());
+  document.querySelectorAll('[data-open-policy]').forEach(b => b.onclick = openPolicy);
+  document.querySelectorAll('[data-close-policy]').forEach(b => b.onclick = closePolicy);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePolicy(); });
+  if (location.hash === '#shipping-returns') openPolicy();
   // search overlay
   const sPop = document.querySelector('.search-pop'), sScrim = document.querySelector('.search-scrim'), sQ = sPop.querySelector('[data-q]'), sRes = sPop.querySelector('[data-results]');
   const openSearch = () => { sPop.hidden = sScrim.hidden = false; sQ.focus(); runSearch(); };

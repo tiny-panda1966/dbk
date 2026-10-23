@@ -51,6 +51,7 @@ const SDK_VERSIONS = {
   data: ['@wix/data'],
   members: ['@wix/members'],
   categories: ['@wix/categories'],
+  forms: ['@wix/forms'],
 };
 export const sdkStatus = {};
 async function loadMod(name, required = false) {
@@ -69,13 +70,13 @@ async function getClient() {
   clientPromise = (async () => {
     if (CONFIG.dataMode === 'fallback' || !CONFIG.clientId) return null;
     try {
-      const [sdk, stores, ecom, redir, data, mem, cats] = await Promise.all([
-        loadMod('sdk', true), loadMod('stores', true), loadMod('ecom'), loadMod('redirects'), loadMod('data'), loadMod('members'), loadMod('categories'),
+      const [sdk, stores, ecom, redir, data, mem, cats, forms] = await Promise.all([
+        loadMod('sdk', true), loadMod('stores', true), loadMod('ecom'), loadMod('redirects'), loadMod('data'), loadMod('members'), loadMod('categories'), loadMod('forms'),
       ]);
       const { createClient, OAuthStrategy } = sdk;
       let tokens = null; try { tokens = JSON.parse(localStorage.getItem(TOKENS_KEY) || 'null'); } catch (e) {}
       const c = createClient({
-        modules: { productsV3: stores.productsV3, readOnlyVariantsV3: stores.readOnlyVariantsV3, ...(ecom?.currentCart ? { currentCart: ecom.currentCart } : {}), ...(redir?.redirects ? { redirects: redir.redirects } : {}), ...(data?.items ? { items: data.items } : {}), ...(mem?.members ? { members: mem.members } : {}), ...(cats?.categories ? { categories: cats.categories } : {}) },
+        modules: { productsV3: stores.productsV3, readOnlyVariantsV3: stores.readOnlyVariantsV3, ...(ecom?.currentCart ? { currentCart: ecom.currentCart } : {}), ...(redir?.redirects ? { redirects: redir.redirects } : {}), ...(data?.items ? { items: data.items } : {}), ...(mem?.members ? { members: mem.members } : {}), ...(cats?.categories ? { categories: cats.categories } : {}), ...(forms?.submissions ? { submissions: forms.submissions } : {}) },
         auth: OAuthStrategy({ clientId: CONFIG.clientId, tokens: tokens || undefined }),
       });
       if (!tokens) localStorage.setItem(TOKENS_KEY, JSON.stringify(await c.auth.generateVisitorTokens()));
@@ -300,6 +301,32 @@ export async function checkout() {
   });
   saveTokens(c);
   location.href = redirectSession.fullUrl;
+}
+
+// ---------- contact form (Wix Forms) ----------
+export async function submitContact(values) {
+  const { formId, fields } = CONFIG.contact || {};
+  const c = await getClient();
+  if (!formId || !c?.submissions) throw new Error('not-configured');
+  const submissions = {};
+  Object.entries(fields).forEach(([k, key]) => { if (values[k]) submissions[key] = values[k]; });
+  const res = await c.submissions.createSubmission({ formId, submissions });
+  saveTokens(c); return res;
+}
+
+// ---------- FAQs (Wix CMS) ----------
+export async function getFaqs() {
+  const c = await getClient(), col = CONFIG.faqCollection || 'faqs';
+  let rows = [];
+  if (c?.items) {
+    try {
+      const res = c.items.query ? await c.items.query(col).ascending('sortOrder').limit(200).find() : await c.items.queryDataItems({ dataCollectionId: col }).ascending('sortOrder').limit(200).find();
+      rows = (res.items || []).map(i => i.data || i);
+      saveTokens(c);
+    } catch (e) { console.warn('[DBK] FAQ query failed:', e?.message || e); }
+  }
+  if (!rows.length) { try { rows = await fetch('data/faqs.json').then(r => r.json()); } catch (e) {} }
+  return rows.filter(r => r.question).map(r => ({ category: r.category || 'General Questions', question: r.question, answer: r.answer || '' }));
 }
 
 // ---------- categories ----------

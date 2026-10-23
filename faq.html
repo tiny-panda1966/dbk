@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQs – DBK Welding Caps</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
+<script type="module">
+  import { mountChrome, esc } from './js/ui.js';
+  import { getFaqs } from './js/wix.js';
+  await mountChrome();
+  const list = document.querySelector('[data-faqs]'), q = document.querySelector('[data-fq]'), cats = document.querySelector('[data-fcats]');
+  const faqs = await getFaqs();
+  const groups = [...new Set(faqs.map(f => f.category))];
+  let cat = 'All';
+  const para = t => esc(t).split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+  function render() {
+    const terms = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+    const hit = f => (cat === 'All' || f.category === cat) && terms.every(t => (f.question + ' ' + f.answer).toLowerCase().includes(t));
+    cats.innerHTML = ['All', ...groups].map(g => `<button type="button" class="cat${g === cat ? ' on' : ''}" data-g="${esc(g)}">${esc(g)} <span>${g === 'All' ? faqs.length : faqs.filter(f => f.category === g).length}</span></button>`).join('');
+    cats.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { cat = b.dataset.g; render(); });
+    const html = groups.map(g => { const items = faqs.filter(f => f.category === g && hit(f)); return items.length ? `<section class="faq-group"><h2>${esc(g)}</h2>${items.map(f => `<details class="faq"><summary>${esc(f.question)}</summary><div class="faq-a">${f.answer ? para(f.answer) : '<p class="muted">Please <a href="contact.html">contact us</a> and we’ll help with this.</p>'}</div></details>`).join('')}</section>` : ''; }).join('');
+    list.innerHTML = html || '<p class="muted">No questions match. <a href="contact.html">Ask us directly</a>.</p>';
+  }
+  q.oninput = render;
+  render();
+</script>
+</head>
+<body>
+<div data-header></div>
+<main class="pad faq-page">
+  <span class="kicker">Help</span>
+  <h1 class="display">FAQs</h1>
+  <input type="search" class="faq-search" data-fq placeholder="Search questions" aria-label="Search questions">
+  <div class="cats" data-fcats></div>
+  <div data-faqs><p class="muted">Loading…</p></div>
+  <p class="faq-more">Still have a question? <a href="contact.html">Contact us</a> · <button type="button" class="link-btn" data-open-policy>Shipping &amp; Returns</button></p>
+</main>
+<div data-footer></div>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact – DBK Welding Caps</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
+<script type="module">
+  import { mountChrome, toast } from './js/ui.js';
+  import { submitContact } from './js/wix.js';
+  import { CONFIG } from './js/config.js';
+  await mountChrome();
+  const { phone, email } = CONFIG.contact;
+  document.querySelector('[data-phone]').href = 'tel:' + phone.replace(/\D/g, ''); document.querySelector('[data-phone]').textContent = phone;
+  document.querySelector('[data-email]').href = 'mailto:' + email; document.querySelector('[data-email]').textContent = email;
+  const form = document.querySelector('[data-contact]'), btn = form.querySelector('button[type=submit]'), ok = document.querySelector('[data-sent]');
+  form.onsubmit = async e => {
+    e.preventDefault();
+    if (!form.reportValidity()) return;
+    const v = Object.fromEntries(new FormData(form));
+    if (v.website) return; // honeypot
+    btn.disabled = true; btn.textContent = 'Sending…';
+    try { await submitContact(v); form.hidden = true; ok.hidden = false; ok.focus(); }
+    catch (err) {
+      console.warn('[DBK] contact', err);
+      const body = encodeURIComponent(`${v.message}\n\n${v.name}\n${v.phone || ''}`);
+      toast('Couldn’t send the form. Opening your email app instead.');
+      location.href = `mailto:${email}?subject=${encodeURIComponent('Website enquiry from ' + v.name)}&body=${body}`;
+      btn.disabled = false; btn.textContent = 'Send message';
+    }
+  };
+</script>
+</head>
+<body>
+<div data-header></div>
+<main class="pad contact">
+  <div class="contact-intro">
+    <img src="assets/dbk-logo.avif" alt="DBK Welding Caps" class="contact-logo">
+    <h1 class="display">Get in Touch</h1>
+    <p>We're here to assist you with any questions</p>
+    <p class="contact-lines"><span>Phone: <a data-phone></a></span><span aria-hidden="true">|</span><span><a data-email></a></span></p>
+  </div>
+  <form class="contact-form" data-contact novalidate>
+    <div class="contact-row">
+      <label class="field"><span><strong>Name</strong></span><input type="text" name="name" required autocomplete="name"></label>
+      <label class="field"><span><strong>Email</strong></span><input type="email" name="email" required autocomplete="email"></label>
+    </div>
+    <label class="field"><span><strong>Phone</strong> <span class="muted">· optional</span></span><input type="tel" name="phone" autocomplete="tel"></label>
+    <label class="field"><span><strong>Message</strong></span><textarea name="message" rows="6" required maxlength="2000"></textarea></label>
+    <input type="text" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
+    <button type="submit" class="btn btn-yellow">Send message</button>
+  </form>
+  <div class="contact-sent" data-sent tabindex="-1" hidden><h2 class="display">Thanks!</h2><p>Your message has been sent. Kelly will get back to you soon.</p></div>
+</main>
+<div data-footer></div>
+</body>
+</html>

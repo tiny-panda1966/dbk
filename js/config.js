@@ -12,6 +12,16 @@ export const CONFIG = {
   thankYouPath: '/thank-you.html',
   // Products shown per "Load more" on the homepage
   pageSize: 12,
+  // Footer social icons – shown only when a URL is set
+  social: { facebook: '', instagram: '' },
+  contact: {
+    phone: '979-922-5053', email: 'dbkweldingcaps@outlook.com',
+    // Wix Forms: create a form in the dashboard (Name, Email, Phone, Message), then paste its form ID and field keys here
+    formId: '',
+    fields: { name: 'first_name', email: 'email', phone: 'phone', message: 'message' },
+  },
+  // Wix CMS collection for FAQs (fields: category, question, answer, sortOrder; Read permission: Anyone)
+  faqCollection: 'faqs',
   // Categories shown on the site, in this order. Matched to Wix Stores category names (case/plural-insensitive).
   categories: ['Welding Caps', 'Fabric', 'Custom Items', 'Embroidery Designs', 'Beanies', 'Accessories', 'Skull Caps'],
   // Products in this category get the 3D builder + embroidery

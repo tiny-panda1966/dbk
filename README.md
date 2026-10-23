@@ -88,6 +88,12 @@ Log in with an admin account (default **tiny.panda@tiny-panda.com**; set `ADMIN_
 - **Member surplus caps:** search or pick a category to add any product, set the discount %, switch it active or inactive, reorder by dragging (or the ↑ ↓ buttons), remove, then **Save changes**. It writes the `memberSurplus` collection (product = product ID, sortOrder = list order).
 - `functions/api/admin.js` checks the Wix login and admin email on every request, so non-admins get "No access".
 
+## Contact, FAQs, policy, social
+- **Contact (`contact.html`):** Name, Email, Phone, Message → **Wix Forms**. In Wix create a form with those 4 fields, then put its **form ID** and each field's **key** in `contact` in `js/config.js`. Submissions appear in Wix Forms/Inbox with Wix's normal email notification. If the form isn't set up or fails, the site opens the customer's email app addressed to Kelly instead.
+- **FAQs (`faq.html`):** read from the CMS collection **`faqs`** (fields: `category`, `question`, `answer` – Text; `sortOrder` – Number; permission **Read: Anyone**). Import `faqs-import.csv` (14 questions, answers blank) and fill in the answers. Questions without an answer show "contact us". Until the collection exists, `data/faqs.json` is used.
+- **Shipping & Returns:** pop-up from the footer (and FAQ page); also opens from any URL ending `#shipping-returns`.
+- **Social:** set `social.facebook` / `social.instagram` in `js/config.js`; icons appear in the footer only once a URL is set.
+
 ## Categories, search and hidden products
 - Category tabs on the homepage and links in the menu come from **Wix Stores categories**, shown in the order of `categories` in `js/config.js` (names matched loosely, so "Skull Caps" matches "Skulls Caps"). Categories with no visible products are skipped.
 - Only products in `builderCategory` ("Welding Caps") get the 3D builder and embroidery. Other products get a normal product page with photos and options.
