@@ -12,4 +12,13 @@ export const CONFIG = {
   thankYouPath: '/thank-you.html',
   // Products shown per "Load more" on the homepage
   pageSize: 12,
+  embroidery: {
+    // Wix product that charges for embroidery, with a choice option (e.g. "Name | Word" / "Logo | Image")
+    // and a free-text option that receives the design details. Leave '' to find it by name ("Embroidery …").
+    productSlug: '',
+    // Wix CMS collection that stores each design + placement preview (see README)
+    designsCollection: 'EmbroideryDesigns',
+    // Shown when no embroidery product is found (preview / fallback mode)
+    fallbackPrices: { text: 11, logo: 41 },
+  },
 };

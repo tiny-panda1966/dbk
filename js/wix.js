@@ -42,13 +42,14 @@ async function getClient() {
   clientPromise = (async () => {
     if (CONFIG.dataMode === 'fallback' || !CONFIG.clientId) return null;
     try {
-      const [{ createClient, OAuthStrategy }, stores, ecom, redir] = await Promise.all([
+      const [{ createClient, OAuthStrategy }, stores, ecom, redir, data] = await Promise.all([
         import('https://esm.sh/@wix/sdk'), import('https://esm.sh/@wix/stores'),
         import('https://esm.sh/@wix/ecom'), import('https://esm.sh/@wix/redirects'),
+        import('https://esm.sh/@wix/data').catch(() => null),
       ]);
       let tokens = null; try { tokens = JSON.parse(localStorage.getItem(TOKENS_KEY) || 'null'); } catch (e) {}
       const c = createClient({
-        modules: { productsV3: stores.productsV3, readOnlyVariantsV3: stores.readOnlyVariantsV3, currentCart: ecom.currentCart, redirects: redir.redirects },
+        modules: { productsV3: stores.productsV3, readOnlyVariantsV3: stores.readOnlyVariantsV3, currentCart: ecom.currentCart, redirects: redir.redirects, ...(data?.items ? { items: data.items } : {}) },
         auth: OAuthStrategy({ clientId: CONFIG.clientId, tokens: tokens || undefined }),
       });
       if (!tokens) localStorage.setItem(TOKENS_KEY, JSON.stringify(await c.auth.generateVisitorTokens()));
@@ -201,6 +202,37 @@ export async function checkout() {
   location.href = redirectSession.fullUrl;
 }
 
+// ---------- embroidery ----------
+const FALLBACK_THREADS = ['Black', 'White', 'Red', 'Blue', 'Yellow', 'Orange', 'Green', 'Gray'];
+export async function getThreads() {
+  try { const c = await loadFallback(); return c.threads?.length ? c.threads : FALLBACK_THREADS; } catch (e) { return FALLBACK_THREADS; }
+}
+
+// The Wix product that charges for embroidery. Set CONFIG.embroidery.productSlug, or it's found by name.
+export async function getEmbroideryProduct() {
+  if (mode !== 'live') return null;
+  const items = await listProducts();
+  const slug = CONFIG.embroidery?.productSlug;
+  const cand = slug ? items.find(p => p.slug === slug) : items.find(p => /embroider/i.test(p.name) && !/welding cap|beanie|skull|fabric|pattern/i.test(p.name));
+  if (!cand) return null;
+  const p = await getProduct(cand.slug); if (!p) return null;
+  const mod = p.modifiers.find(m => m.type !== 'FREE_TEXT' && m.choices.some(c => /name|word|logo|image/i.test(c.name)));
+  const pick = re => mod?.choices.find(c => re.test(c.name)) || null;
+  return { product: p, mod, text: pick(/name|word/i), logo: pick(/logo|image/i), note: p.modifiers.find(m => m.type === 'FREE_TEXT') || null };
+}
+
+// Saves the design + placement preview to the Wix CMS so Kelly can see exactly what the customer saw.
+export async function saveDesign(design) {
+  const c = await getClient();
+  if (!c || !c.items || mode !== 'live') return '';
+  const col = CONFIG.embroidery?.designsCollection || 'EmbroideryDesigns';
+  try {
+    const item = c.items.insert ? await c.items.insert(col, design) : (await c.items.insertDataItem({ dataCollectionId: col, dataItem: { data: design } })).dataItem;
+    saveTokens(c);
+    return item?._id || item?.id || '';
+  } catch (e) { console.warn('[DBK] Saving embroidery design to CMS failed:', e); return ''; }
+}
+
 export function clearLocalCart() { writeLocal([]); emit(); }
 
 // For diagnostics.html
@@ -208,5 +240,7 @@ export async function _debug() {
   const c = await getClient();
   if (!c) return { client: false };
   const res = await c.productsV3.queryProducts().limit(1).find();
-  return { client: true, sample: res.items[0] || null };
+  await listProducts();
+  const emb = await getEmbroideryProduct().catch(e => ({ error: String(e) }));
+  return { client: true, cms: !!c.items, embroidery: emb && { name: emb.product?.name, slug: emb.product?.slug, price: emb.product?.price, option: emb.mod?.name, text: emb.text, logo: emb.logo, note: emb.note?.name, error: emb.error }, sample: res.items[0] || null };
 }
