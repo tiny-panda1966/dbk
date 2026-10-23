@@ -324,7 +324,7 @@ img{display:block;max-width:100%}
 .contact-form,.contact-sent{display:flex;flex-direction:column;gap:16px;border:1.5px solid var(--ink);border-radius:2px;padding:clamp(18px,3vw,28px)}
 .contact-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
 .contact-form input[type=text],.contact-form input[type=email],.contact-form input[type=tel],.contact-form textarea{font-size:16px;padding:12px;border:1.5px solid var(--ink);border-radius:2px;width:100%}
-.contact-form input:invalid:not(:placeholder-shown){border-color:#b3261e}
+.contact-form.tried :invalid{border-color:#b3261e}
 .contact-form .btn{align-self:flex-start}
 .contact-sent h2{font-size:48px}.contact-sent p{margin:0;font-size:18px}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
@@ -368,7 +368,7 @@ img{display:block;max-width:100%}
 .foot-links{display:flex;flex-direction:column;gap:2px}
 .foot-links a,.foot-links .link-btn{color:var(--ink);font-weight:600;font-size:15px;min-height:36px;display:flex;align-items:center;text-decoration:none;text-align:left}
 .foot-links a:hover,.foot-links .link-btn:hover{text-decoration:underline}
-.foot-logo{height:56px;width:auto;mix-blend-mode:multiply}
+.foot-logo{height:64px;width:auto;max-width:220px;object-fit:contain;align-self:flex-start;margin:-8px -8px 0;mix-blend-mode:multiply;filter:brightness(1.14) contrast(1.25)}
 .foot-meta{display:flex;flex-direction:column;gap:6px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;z-index:60;background:var(--ink);color:#fff;padding:12px 18px;border-radius:2px;font-size:15px;max-width:calc(100% - 32px);transition:.25s;pointer-events:none}
 .toast.show{opacity:1;transform:translate(-50%,0)}
