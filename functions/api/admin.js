@@ -7,6 +7,7 @@ const WIX = 'https://www.wixapis.com';
 const json = (b, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const H = env => ({ Authorization: env.WIX_API_KEY, 'wix-site-id': env.WIX_SITE_ID, 'content-type': 'application/json' });
 const SURPLUS = env => env.WIX_SURPLUS_COLLECTION || 'memberSurplus';
+const PREFS = env => env.WIX_PREFS_COLLECTION || 'memberPreferences';
 const admins = env => (env.ADMIN_EMAILS || 'tiny.panda@tiny-panda.com').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
 async function wix(env, path, body, method = 'POST') {
@@ -56,6 +57,27 @@ async function saveSurplus(env, rows) {
   return listSurplus(env);
 }
 
+async function listInstructions(env) {
+  const out = []; let offset = 0;
+  for (;;) {
+    const j = await wix(env, '/wix-data/v2/items/query', { dataCollectionId: PREFS(env), query: { sort: [{ fieldName: '_updatedDate', order: 'DESC' }], paging: { limit: 100, offset } } });
+    const items = j.dataItems || [];
+    items.forEach(i => { const d = i.data || {}; if ((d.instructions || '').trim()) out.push({ id: i.id || i._id, email: d.email || '', memberId: d.memberId || '', instructions: d.instructions, instructionsConfirmed: d.instructionsConfirmed || '', status: d.instructionsStatus === 'confirmed' ? 'confirmed' : 'awaiting', updated: d._updatedDate || '' }); });
+    if (items.length < 100) break; offset += 100;
+  }
+  return out;
+}
+async function confirmInstructions(env, { id, confirmed, status }) {
+  if (!id) throw new Error('Missing id');
+  const cur = await wix(env, `/wix-data/v2/items/${id}?dataCollectionId=${encodeURIComponent(PREFS(env))}`, null, 'GET');
+  const data = { ...(cur.dataItem?.data || {}) };
+  const text = String(confirmed ?? '').trim().slice(0, 500);
+  if (status === 'awaiting') data.instructionsStatus = 'awaiting';
+  else { if (!text) throw new Error('Enter the confirmed wording'); data.instructionsConfirmed = text; data.instructionsStatus = 'confirmed'; }
+  await wix(env, `/wix-data/v2/items/${id}`, { dataCollectionId: PREFS(env), dataItem: { id, data } }, 'PUT');
+  return { id, instructionsConfirmed: data.instructionsConfirmed || '', status: data.instructionsStatus };
+}
+
 export async function onRequest({ request, env }) {
   if (!env.WIX_API_KEY || !env.WIX_SITE_ID) return json({ error: 'Server not configured' }, 501);
   const a = await verifyAdmin(request, env);
@@ -66,6 +88,10 @@ export async function onRequest({ request, env }) {
     if (action === 'surplus') {
       if (request.method === 'POST') return json({ items: await saveSurplus(env, (await request.json()).items) });
       return json({ items: await listSurplus(env) });
+    }
+    if (action === 'instructions') {
+      if (request.method === 'POST') return json(await confirmInstructions(env, await request.json()));
+      return json({ items: await listInstructions(env) });
     }
     return json({ error: 'Unknown action' }, 400);
   } catch (e) { return json({ error: String(e.message || e) }, 502); }

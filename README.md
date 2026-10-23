@@ -84,6 +84,7 @@ Check `/diagnostics.html` → "Member function" should show `configured: true`.
 
 ## Admin – `/admin.html`
 Log in with an admin account (default **tiny.panda@tiny-panda.com**; set `ADMIN_EMAILS` in Cloudflare as a comma-separated list to change it). Admins also see an **Admin** button on their account page.
+- **Special instructions** (opens first, with a count of how many are waiting): every member instruction from `memberPreferences`, filtered by Awaiting / Confirmed / All. Kelly reads what the customer wrote, types the clear wording (or "Use customer's words"), and clicks **Confirm**. That sets `instructionsConfirmed` + `instructionsStatus = confirmed`, and it goes on every order from that customer. "Mark as awaiting" reopens one. If the customer changes their words, it goes back to Awaiting automatically.
 - **Member surplus caps:** search or pick a category to add any product, set the discount %, switch it active or inactive, reorder by dragging (or the ↑ ↓ buttons), remove, then **Save changes**. It writes the `memberSurplus` collection (product = product ID, sortOrder = list order).
 - `functions/api/admin.js` checks the Wix login and admin email on every request, so non-admins get "No access".
 

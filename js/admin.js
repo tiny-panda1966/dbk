@@ -14,11 +14,21 @@ if (!member) {
   try { who = await api('whoami'); } catch (e) {
     root.innerHTML = `<section class="pad admin-gate"><span class="kicker">DBK admin</span><h1 class="display">No access</h1><p class="muted">${esc(e.message)} Signed in as ${esc(member.email || '')}.</p><a href="index.html" class="btn btn-outline">Back to the shop</a></section>`;
   }
-  if (who) await mountSurplus();
+  if (who) {
+    root.innerHTML = `<div class="pad-x admin-tabs-wrap"><div class="admin-tabs" role="tablist">
+      <button type="button" role="tab" data-atab="instr">Special instructions <span class="tag" data-acount hidden></span></button>
+      <button type="button" role="tab" data-atab="surplus">Surplus caps</button></div></div>
+      <div data-apanel="instr"></div><div data-apanel="surplus" hidden></div>`;
+    const show = k => { root.querySelectorAll('[data-atab]').forEach(b => { b.classList.toggle('on', b.dataset.atab === k); b.setAttribute('aria-selected', b.dataset.atab === k); }); root.querySelectorAll('[data-apanel]').forEach(p => p.hidden = p.dataset.apanel !== k); history.replaceState(null, '', '#' + k); };
+    root.querySelectorAll('[data-atab]').forEach(b => b.onclick = () => show(b.dataset.atab));
+    show(location.hash === '#surplus' ? 'surplus' : 'instr');
+    mountInstructions(root.querySelector('[data-apanel="instr"]'));
+    mountSurplus(root.querySelector('[data-apanel="surplus"]'));
+  }
 }
 
-async function mountSurplus() {
-  root.innerHTML = `
+async function mountSurplus(el) {
+  el.innerHTML = `
   <section class="pad admin">
     <div class="acct-head"><div><span class="kicker">DBK admin · ${esc(member.email || '')}</span><h1 class="display">Member surplus caps</h1><span class="muted">Shown to logged-in members on their account page, in this order. The discount is applied at checkout with the member coupon.</span></div>
       <div class="hero-ctas"><button type="button" class="btn btn-yellow" data-save disabled>Save changes</button></div></div>
@@ -41,7 +51,7 @@ async function mountSurplus() {
   const find = ref => items.find(p => p.id === ref || p.slug === ref || p.name.toLowerCase() === String(ref).toLowerCase());
   let rows = saved.map(s => ({ ...s, p: find(s.product) }));
   let dirty = false;
-  const $ = s => root.querySelector(s);
+  const $ = s => el.querySelector(s);
   const setDirty = v => { dirty = v; $('[data-save]').disabled = !v; $('[data-dirty]').textContent = v ? 'Unsaved changes' : ''; };
   window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -101,4 +111,54 @@ async function mountSurplus() {
     e.target.textContent = 'Save changes';
   };
   renderRows();
+}
+
+async function mountInstructions(el) {
+  el.innerHTML = `
+  <section class="pad admin">
+    <div class="acct-head"><div><span class="kicker">DBK admin · ${esc(member.email || '')}</span><h1 class="display">Special instructions</h1>
+      <span class="muted">Customers write instructions in their own words. Type the clear wording you'll follow and confirm it. It's then added to every order from that customer.</span></div>
+      <div class="seg-btns" role="group" aria-label="Filter"><button type="button" data-f="awaiting" class="on">Awaiting</button><button type="button" data-f="confirmed">Confirmed</button><button type="button" data-f="all">All</button></div></div>
+    <div data-ilist><p class="muted">Loading…</p></div>
+  </section>`;
+  const list = el.querySelector('[data-ilist]'), badge = root.querySelector('[data-acount]');
+  let items = [], filter = 'awaiting';
+  const fmt = d => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const updBadge = () => { const n = items.filter(i => i.status === 'awaiting').length; badge.hidden = !n; badge.textContent = n; };
+  function render() {
+    const rows = items.filter(i => filter === 'all' || i.status === filter);
+    el.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === filter));
+    list.innerHTML = rows.length ? rows.map(i => `
+      <article class="panel instr-card" data-id="${esc(i.id)}">
+        <div class="panel-head"><div class="instr-who"><strong>${esc(i.email || 'Member')}</strong><span class="muted mono">Updated ${fmt(i.updated)}</span></div><span class="tag${i.status === 'confirmed' ? ' ok' : ''}">${i.status === 'confirmed' ? 'Confirmed' : 'Awaiting DBK'}</span></div>
+        <div class="instr-body">
+          <div class="instr-cust"><span class="kicker">Customer wrote</span><p>“${esc(i.instructions)}”</p></div>
+          <label class="field"><span class="kicker">Confirmed wording · goes on every order</span><textarea rows="3" maxlength="500" data-c placeholder="e.g. Move the band seam from the back of the cap to the visor area, hidden under the bill."></textarea></label>
+          <div class="instr-actions">
+            <button type="button" class="btn btn-dark" data-confirm>${i.status === 'confirmed' ? 'Update wording' : 'Confirm'}</button>
+            ${i.status === 'confirmed' ? '<button type="button" class="btn-sm" data-reopen>Mark as awaiting</button>' : '<button type="button" class="btn-sm" data-copy>Use customer’s words</button>'}
+            ${i.email ? `<a class="link-btn" href="mailto:${esc(i.email)}?subject=${encodeURIComponent('Your DBK cap instructions')}">Email customer</a>` : ''}
+          </div>
+        </div>
+      </article>`).join('') : `<p class="muted pad-s">${filter === 'awaiting' ? 'Nothing waiting. All customer instructions are confirmed.' : 'No instructions yet.'}</p>`;
+    list.querySelectorAll('.instr-card').forEach(card => {
+      const it = items.find(x => x.id === card.dataset.id), ta = card.querySelector('[data-c]');
+      ta.value = it.instructionsConfirmed || '';
+      card.querySelector('[data-copy]')?.addEventListener('click', () => { ta.value = it.instructions; ta.focus(); });
+      card.querySelector('[data-confirm]').onclick = async e => {
+        if (!ta.value.trim()) { ta.focus(); toast('Type the confirmed wording first'); return; }
+        e.target.disabled = true; e.target.textContent = 'Saving…';
+        try { const r = await api('instructions', { id: it.id, confirmed: ta.value }); Object.assign(it, { instructionsConfirmed: r.instructionsConfirmed, status: 'confirmed' }); toast('Instructions confirmed'); updBadge(); render(); }
+        catch (err) { toast('Couldn’t save: ' + err.message); e.target.disabled = false; e.target.textContent = 'Confirm'; }
+      };
+      card.querySelector('[data-reopen]')?.addEventListener('click', async e => {
+        e.target.disabled = true;
+        try { await api('instructions', { id: it.id, status: 'awaiting' }); it.status = 'awaiting'; toast('Marked as awaiting'); updBadge(); render(); }
+        catch (err) { toast('Couldn’t save: ' + err.message); e.target.disabled = false; }
+      });
+    });
+  }
+  el.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; render(); });
+  try { items = (await api('instructions')).items; updBadge(); render(); }
+  catch (e) { list.innerHTML = `<p class="err pad-s">Couldn’t load instructions: ${esc(e.message)}</p>`; }
 }

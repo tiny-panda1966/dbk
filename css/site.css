@@ -292,6 +292,18 @@ img{display:block;max-width:100%}
   .adm-drag{grid-area:d}.adm-prod{grid-area:p}.adm-pct{grid-area:pct}.adm-price{grid-area:price}.adm-row .toggle{grid-area:act;justify-self:end}.adm-btns{grid-area:btns}
 }
 
+.admin-tabs-wrap{padding-top:24px}
+.admin-tabs{display:flex;border-bottom:2px solid var(--ink);overflow-x:auto;scrollbar-width:none}
+.admin-tabs button{flex-shrink:0;min-height:48px;padding:0 18px;border:0;background:none;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;border-bottom:4px solid transparent;margin-bottom:-2px;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.admin-tabs button.on{border-bottom-color:var(--yellow);background:#fffbe6}
+.admin .seg-btns button{min-height:44px}
+[data-ilist]{display:flex;flex-direction:column;gap:18px}
+.instr-who{display:flex;flex-direction:column;gap:2px}.instr-who .mono{font-size:12px}
+.instr-body{padding:16px 18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px 24px;align-items:start}
+.instr-cust{background:var(--paper);border-radius:2px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.instr-cust p{margin:0;font-size:16px;line-height:1.5}
+.instr-actions{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
 /* cart drawer */
 .drawer-scrim{position:fixed;inset:0;background:#1d1d1f80;z-index:40}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);background:#fff;z-index:41;display:flex;flex-direction:column;box-shadow:-20px 0 40px #0003}
