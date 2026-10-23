@@ -1,5 +1,5 @@
 import { mountChrome, esc, toast, openCart } from './ui.js';
-import { listProducts, getProduct, addToCart, getEmbroideryProduct, getThreads, saveDesign, getMode, IMG, IMG_FIT, money, FEATURED, findFeatured } from './wix.js';
+import { listProducts, getProduct, addToCart, linkLines, getEmbroideryProduct, getThreads, saveDesign, getMode, IMG, IMG_FIT, money, FEATURED, findFeatured } from './wix.js';
 import { createBuilder } from './builder.js';
 import { CONFIG } from './config.js';
 
@@ -134,16 +134,18 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
       if (!(embProduct?.[e.mode === 'upload' ? 'logo' : 'text']) && textMods[0]) { const k = textMods[0].key; capTexts[k] = [capTexts[k], 'EMBROIDERY – ' + spec].filter(Boolean).join('\n').slice(0, textMods[0].text.max); }
     }
     const fit = [...choiceMods.map(m => `${label(m)}: ${chosen(m)?.name || '—'}`), ...textMods.filter(m => state.text[m.key]?.trim()).map(m => `${m.name.replace(' (Please Specify)', '')}: ${state.text[m.key].trim()}`)];
-    await addToCart(p, { choices: state.sel, texts: capTexts, qty: state.qty, unit: unit() - embCost(), summary: fit });
+    const capLine = await addToCart(p, { choices: state.sel, texts: capTexts, qty: state.qty, unit: unit() - embCost(), summary: fit });
     const choice = e && embProduct?.[e.mode === 'upload' ? 'logo' : 'text'];
     if (e && choice) {
-      await addToCart(embProduct.kind === 'variant' ? { ...embProduct.product, variantId: choice.variantId } : embProduct.product, {
+      const embLine = await addToCart(embProduct.kind === 'variant' ? { ...embProduct.product, variantId: choice.variantId } : embProduct.product, {
         choices: embProduct.kind === 'modifier' ? { [embProduct.mod.key]: choice.key } : {},
         texts: embProduct.note ? { [embProduct.note.text.key]: spec.slice(0, embProduct.note.text.max) } : {},
         qty: state.qty, unit: embCost(), summary: [spec],
       });
+      linkLines(capLine, embLine);
     } else if (e && getMode() !== 'live') {
-      await addToCart({ ...p, id: p.id + '-emb', name: `Embroidery – ${e.mode === 'text' ? 'Name | Word' : 'Logo | Image'}`, live: false, images: p.images }, { qty: state.qty, unit: embCost(), summary: [spec] });
+      const embLine = await addToCart({ ...p, id: p.id + '-emb', name: `Embroidery – ${e.mode === 'text' ? 'Name | Word' : 'Logo | Image'}`, live: false, images: p.images }, { qty: state.qty, unit: embCost(), summary: [spec] });
+      linkLines(capLine, embLine);
     }
     openCart();
   } catch (err) { console.error(err); toast('Couldn’t add to cart. Please try again.'); }

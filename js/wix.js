@@ -5,6 +5,10 @@ import { CONFIG } from './config.js';
 const TOKENS_KEY = 'dbk.wixTokens';
 const LOCAL_CART_KEY = 'dbk.localCart';
 const LIST_CACHE_KEY = 'dbk.products.v1';
+const LINKS_KEY = 'dbk.cartLinks'; // { embroideryLineId: capLineId }
+const readLinks = () => { try { return JSON.parse(localStorage.getItem(LINKS_KEY) || '{}'); } catch (e) { return {}; } };
+const writeLinks = l => localStorage.setItem(LINKS_KEY, JSON.stringify(l));
+export function linkLines(capId, embId) { if (!capId || !embId) return; const l = readLinks(); l[embId] = capId; writeLinks(l); }
 
 let clientPromise = null;
 let mode = null; // 'live' | 'fallback'
@@ -123,32 +127,45 @@ export async function listProducts() {
 
 // Variants (product OPTIONS such as "Embroidery options") with their own price. Visitors don't get variantsInfo
 // from product queries, so read them from the read-only variants API.
-const normVariant = v => {
-  const ch = (v.choices || v.optionChoices || []).map(c => c.optionChoiceNames || c);
+const choiceLookup = raw => {
+  const m = {};
+  (raw?.options || []).forEach(o => (o.choicesSettings?.choices || o.choices || []).forEach(ch => { m[ch.choiceId || ch._id || ch.key] = { option: o.name, choice: ch.name }; }));
+  return m;
+};
+const normVariant = (v, look = {}) => {
+  const list = v.choices || v.optionChoices || v.variant?.choices || [];
   return {
-    id: v.variantId || v._id || v.id,
-    choices: ch.map(c => ({ option: c.optionName || c.option || '', choice: c.choiceName || c.choice || c.name || '' })),
+    id: v.variantId || v._id || v.id || v.variant?._id,
+    choices: list.map(c => {
+      const n = c.optionChoiceNames || {};
+      const ids = c.optionChoiceIds || c;
+      const viaId = look[ids.choiceId] || {};
+      return { option: n.optionName || c.optionName || viaId.option || '', choice: n.choiceName || c.choiceName || c.name || viaId.choice || '' };
+    }),
     price: Number(v.price?.actualPrice?.amount ?? v.actualPrice?.amount ?? v.price?.amount ?? v.productData?.actualPriceRange?.minValue?.amount ?? NaN),
     sku: v.sku || '',
   };
 };
 export async function getVariants(productId, raw) {
+  const look = choiceLookup(raw), nv = v => normVariant(v, look);
   const fromRaw = raw?.variantsInfo?.variants;
-  if (fromRaw?.length && fromRaw.some(v => v.price)) return fromRaw.map(normVariant);
+  if (fromRaw?.length && fromRaw.some(v => v.price)) return fromRaw.map(nv);
   const c = await getClient(); if (!c) return [];
   try {
     let res = await c.readOnlyVariantsV3.queryVariants().eq('productData.productId', productId).limit(100).find();
     const all = [...res.items];
     while (res.hasNext && res.hasNext()) { res = await res.next(); all.push(...res.items); }
-    saveTokens(c); return all.map(normVariant);
-  } catch (e) { console.warn('[DBK] Variant query failed:', e); return (fromRaw || []).map(normVariant); }
+    saveTokens(c); return all.map(nv);
+  } catch (e) { console.warn('[DBK] Variant query failed:', e); return (fromRaw || []).map(nv); }
 }
 
 export async function getProduct(slug) {
   const c = await getClient();
   if (c) {
     try {
-      const res = await c.productsV3.getProductBySlug(slug, { fields: ['MEDIA_ITEMS_INFO', 'PLAIN_DESCRIPTION', 'CURRENCY'] });
+      let res;
+      try { res = await c.productsV3.getProductBySlug(slug, { fields: ['MEDIA_ITEMS_INFO', 'PLAIN_DESCRIPTION', 'CURRENCY', 'VARIANT_OPTION_CHOICE_NAMES'] }); }
+      catch (e) { res = await c.productsV3.getProductBySlug(slug, { fields: ['MEDIA_ITEMS_INFO', 'PLAIN_DESCRIPTION', 'CURRENCY'] }); }
       const raw = res.product || res;
       const p = normV3(raw); p._raw = raw;
       if (!p.variantId) {
@@ -174,6 +191,13 @@ const writeLocal = c => localStorage.setItem(LOCAL_CART_KEY, JSON.stringify(c));
 const emit = () => window.dispatchEvent(new CustomEvent('dbk:cart'));
 
 export async function getCart() {
+  const lines = await rawCart();
+  const links = readLinks(), ids = new Set(lines.map(l => l.id)), fresh = {};
+  Object.entries(links).forEach(([e, cap]) => { if (ids.has(e) && ids.has(cap)) fresh[e] = cap; });
+  if (Object.keys(fresh).length !== Object.keys(links).length) writeLinks(fresh);
+  return lines.map(l => ({ ...l, parent: fresh[l.id] || null }));
+}
+async function rawCart() {
   const c = await getClient();
   if (c && mode !== 'fallback') {
     try {
@@ -195,27 +219,44 @@ export async function addToCart(product, { choices = {}, texts = {}, qty = 1, un
     if (product.variantId) options.variantId = product.variantId;
     const ct = Object.fromEntries(Object.entries(texts).filter(([, v]) => v && v.trim()));
     if (Object.keys(ct).length) options.customTextFields = ct;
-    await c.currentCart.addToCurrentCart({ lineItems: [{ catalogReference: { appId: CONFIG.storesAppId, catalogItemId: product.id, options }, quantity: qty }] });
-    saveTokens(c); emit(); return;
+    const before = new Map((await rawCart()).map(l => [l.id, l.qty]));
+    const res = await c.currentCart.addToCurrentCart({ lineItems: [{ catalogReference: { appId: CONFIG.storesAppId, catalogItemId: product.id, options }, quantity: qty }] });
+    saveTokens(c);
+    const after = res?.cart?.lineItems || [];
+    const hit = after.find(li => !before.has(li._id)) || after.find(li => before.get(li._id) !== li.quantity && li.catalogReference?.catalogItemId === product.id);
+    emit(); return hit?._id || null;
   }
-  const cart = readLocal();
-  cart.push({ id: 'l' + Date.now(), name: product.name, qty, unit, img: product.images[0], lines: summary });
-  writeLocal(cart); emit();
+  const cart = readLocal(), id = 'l' + Date.now() + Math.random().toString(36).slice(2, 6);
+  cart.push({ id, name: product.name, qty, unit, img: product.images[0], lines: summary });
+  writeLocal(cart); emit(); return id;
 }
 
 export async function setQty(id, qty) {
+  const links = readLinks();
+  const kids = Object.keys(links).filter(e => links[e] === id);
+  const ids = [id, ...(qty < 1 || kids.length === 1 ? kids : [])]; // with several embroideries on one merged cap line, only removal cascades
   const c = await getClient();
   if (c && mode === 'live') {
-    if (qty < 1) await c.currentCart.removeLineItemsFromCurrentCart([id]);
-    else await c.currentCart.updateCurrentCartLineItemQuantity([{ _id: id, quantity: qty }]);
-    saveTokens(c); emit(); return;
+    if (qty < 1) await c.currentCart.removeLineItemsFromCurrentCart(ids);
+    else await c.currentCart.updateCurrentCartLineItemQuantity(ids.map(_id => ({ _id, quantity: qty })));
+    saveTokens(c);
+  } else {
+    writeLocal(readLocal().map(l => ids.includes(l.id) ? { ...l, qty } : l).filter(l => l.qty > 0));
   }
-  writeLocal(readLocal().map(l => l.id === id ? { ...l, qty } : l).filter(l => l.qty > 0)); emit();
+  if (qty < 1) { ids.forEach(i => delete links[i]); writeLinks(links); }
+  emit();
 }
 
 export async function checkout() {
   const c = await getClient();
   if (!c || mode !== 'live') throw new Error('Checkout opens once the store is connected to Wix. This preview is using the exported catalogue.');
+  const embId = CONFIG.embroidery?.productId;
+  if (embId) {
+    const cart = await c.currentCart.getCurrentCart().catch(() => null);
+    const links = readLinks(), ids = new Set((cart?.lineItems || []).map(l => l._id));
+    const orphans = (cart?.lineItems || []).filter(li => li.catalogReference?.catalogItemId === embId && !(links[li._id] && ids.has(links[li._id]))).map(li => li._id);
+    if (orphans.length) await c.currentCart.removeLineItemsFromCurrentCart(orphans);
+  }
   const { checkoutId } = await c.currentCart.createCheckoutFromCurrentCart({ channelType: 'WEB' });
   const origin = location.origin;
   const { redirectSession } = await c.redirects.createRedirectSession({
@@ -244,7 +285,7 @@ export async function getEmbroideryProduct() {
   const note = p.modifiers.find(m => m.type === 'FREE_TEXT') || null;
   // A) "Embroidery options" is a product option → one variant per choice, each with its own price
   const variants = await getVariants(p.id, p._raw);
-  const vPick = re => { const v = variants.find(v => v.choices.some(c => re.test(c.choice))); return v ? { variantId: v.id, name: v.choices.map(c => c.choice).join(' / '), price: Number.isFinite(v.price) ? v.price : p.price } : null; };
+  const vPick = re => { const v = variants.find(v => v.choices.some(c => re.test(c.choice))); return v ? { variantId: v.id, name: v.choices.map(c => c.choice).join(' / '), price: Number.isFinite(v.price) && v.price > 0 ? v.price : (CONFIG.embroidery.fallbackPrices[re.source.includes('logo') ? 'logo' : 'text'] ?? p.price) } : null; };
   const vt = vPick(/name|word/i), vl = vPick(/logo|image/i);
   if (vt || vl) return { product: p, kind: 'variant', text: vt, logo: vl, note, variants };
   // B) a choice modifier with added prices

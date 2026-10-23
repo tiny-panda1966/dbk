@@ -65,7 +65,16 @@ async function renderCart() {
   const count = lines.reduce((a, l) => a + l.qty, 0);
   document.querySelectorAll('[data-cart-count]').forEach(e => e.textContent = count);
   const box = document.querySelector('[data-cart-lines]'); if (!box) return;
-  box.innerHTML = lines.length ? lines.map(l => `
+  const ordered = [];
+  lines.filter(l => !l.parent).forEach(l => { ordered.push(l); lines.filter(k => k.parent === l.id).forEach(k => ordered.push(k)); });
+  box.innerHTML = lines.length ? ordered.map(l => l.parent ? `
+    <div class="cart-line cart-child">
+      <div class="cart-info">
+        <div class="cart-name"><span>+ ${esc(l.name)}</span><span class="mono">${money(l.unit * l.qty)}</span></div>
+        ${l.lines.length ? `<div class="cart-desc">${l.lines.map(esc).join('<br>')}</div>` : ''}
+        <div class="qty small plain"><span class="muted">Qty ${l.qty} · follows the cap</span><button type="button" class="link-btn" data-q="${esc(l.id)}" data-d="remove">Remove embroidery</button></div>
+      </div>
+    </div>` : `
     <div class="cart-line">
       <div class="cart-thumb" style="background-image:url('${IMG(l.img, 200)}')"></div>
       <div class="cart-info">
