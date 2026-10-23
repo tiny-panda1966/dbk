@@ -1,4 +1,4 @@
-// Site configuration. The only values Kelly's Wix account needs to supply.
+// Site configuration. TEST: Tiny Panda Wix account. At handover, swap clientId for Kelly's OAuth app (see README).
 export const CONFIG = {
   // Wix dashboard → Settings → Headless Settings → OAuth app → Client ID
   clientId: 'f7353b9c-4474-4921-ae11-5ccd094debaf',

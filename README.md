@@ -1,6 +1,6 @@
 # DBK Welding Caps – storefront
 
-Static storefront for DBK – Welding Caps, hosted on Cloudflare Pages and connected to Kelly's Wix account through **Wix Headless**. Products, prices, options, images, cart and checkout all come from Wix. There's no build step.
+Static storefront for DBK – Welding Caps, hosted on Cloudflare Pages and connected to the **Tiny Panda Wix account** (which holds the DBK store) through **Wix Headless**. Products, prices, options, images, cart and checkout all come from Wix. There's no build step.
 
 ## Status – Phase 1 of 3
 - [x] Homepage, colour filters, product grid, mega menu
@@ -20,13 +20,13 @@ Static storefront for DBK – Welding Caps, hosted on Cloudflare Pages and conne
 | `data/catalog.json` | Exported catalogue, used only if Wix can't be reached |
 | `diagnostics.html` | Shows whether the site is LIVE or using the fallback |
 
-## One-time Wix setup (Kelly's dashboard)
+## One-time Wix setup (Tiny Panda Wix dashboard)
 1. **Enable Headless:** Wix dashboard → Settings → Headless Settings. The OAuth app with client ID `f7353b9c-…debaf` is already in `js/config.js`.
 2. In that OAuth app, add these **allowed domains / redirect URLs**:
-   - `https://kellycaps.pages.dev`
+   - `https://dbk-brk.pages.dev`
    - `http://localhost:8788` (local testing)
 3. Check Wix Stores products are **visible** and Wix payments are connected (checkout runs on Wix).
-4. Open `https://kellycaps.pages.dev/diagnostics.html` – it should say **LIVE**.
+4. Open `https://dbk-brk.pages.dev/diagnostics.html` – it should say **LIVE**.
 
 Until step 1 is done the site runs on `data/catalog.json` (same products, local cart, checkout disabled with a note). Set `dataMode: 'live'` in `js/config.js` once Wix is connected so failures show instead of falling back.
 
@@ -34,6 +34,16 @@ Until step 1 is done the site runs on `data/catalog.json` (same products, local 
 Commit the contents of this folder to the repo root. Cloudflare Pages: framework preset **None**, build command empty, output directory `/`. Every push to `main` redeploys.
 
 Local preview: `npx wrangler pages dev .` (or any static server) from this folder.
+
+## Moving to Kelly's Wix account (after testing)
+The site runs on the Tiny Panda Wix account while it's being tested. To move it to Kelly's account:
+1. In Kelly's Wix dashboard, enable Headless and create an OAuth app. Add the live domain (and `https://dbk-brk.pages.dev` if still used) as allowed domains / redirect URLs.
+2. Replace `clientId` in `js/config.js` with the new Client ID, commit, and Cloudflare redeploys.
+3. Check products and options match Kelly's store (same option names, e.g. "Cap Size", "Bill Size"), and her payments are connected.
+4. Open `/diagnostics.html` – it should say LIVE – then place a test order.
+5. Phase 3 only: recreate the CMS collections (member preferences, special instructions) in Kelly's site with the same names and permissions.
+
+No other code changes are needed; everything account-specific is in `js/config.js`.
 
 ## Before launch
 - Remove `<meta name="robots" content="noindex">` from the pages and the `robots.txt` / `_headers` blocks.
