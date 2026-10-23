@@ -13,7 +13,7 @@ const titleEl = document.querySelector('[data-title]');
 const searchEl = document.querySelector('[data-search]');
 const qs = new URLSearchParams(location.search);
 let all = [], cats = [], builderCat = null;
-let cat = qs.get('cat') || 'all', colour = qs.get('colour') || 'All', q = qs.get('q') || '', shown = CONFIG.pageSize;
+let cat = qs.get('cat') || '', colour = qs.get('colour') || 'All', q = qs.get('q') || '', shown = CONFIG.pageSize;
 searchEl.value = q;
 
 const words = s => s.toLowerCase().split(/\s+/).filter(Boolean);
@@ -22,7 +22,7 @@ const catObj = () => cats.find(c => c.slug === cat) || null;
 
 function pushUrl() {
   const u = new URLSearchParams();
-  if (cat !== 'all') u.set('cat', cat);
+  u.set('cat', cat);
   if (colour !== 'All') u.set('colour', colour);
   if (q) u.set('q', q);
   history.replaceState(null, '', 'index.html' + (u.toString() ? '?' + u : '') + '#prints');
@@ -66,6 +66,7 @@ searchEl.closest('form').onsubmit = e => { e.preventDefault(); q = searchEl.valu
 try {
   all = await listProducts();
   [cats, builderCat] = await Promise.all([listCategories(), builderCategoryId()]);
+  if (!cat || (cat !== 'all' && !cats.some(c => c.slug === cat))) cat = cats.find(c => c.id === builderCat)?.slug || 'all';
   document.querySelectorAll('[data-total]').forEach(e => e.textContent = all.filter(p => p.cats?.includes(builderCat)).length || all.length);
   searchEl.placeholder = `Search ${all.length} products`;
   render();

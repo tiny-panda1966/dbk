@@ -4,6 +4,29 @@ import { listProducts, listCategories, getCart, setQty, checkout, getMode, getMe
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const productUrl = p => `product.html?slug=${encodeURIComponent(p.slug)}`;
 
+// Full-screen "working on it" overlay with step messages: busy.show(text) → busy.step(text) → busy.done(text) / busy.hide()
+export const busy = (() => {
+  let el, t0 = 0;
+  const ensure = () => {
+    if (el) return el;
+    el = document.createElement('div'); el.className = 'busy'; el.hidden = true;
+    el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+    el.innerHTML = '<div class="busy-card"><div class="busy-spin" aria-hidden="true"><span></span></div><strong data-busy-t></strong><ol class="busy-steps" data-busy-steps></ol><div class="busy-bar" aria-hidden="true"><span></span></div></div>';
+    document.body.appendChild(el); return el;
+  };
+  const steps = () => ensure().querySelector('[data-busy-steps]');
+  const mark = () => steps().querySelectorAll('li:not(.ok)').forEach(li => li.classList.add('ok'));
+  return {
+    show(text) { const e = ensure(); t0 = Date.now(); e.querySelector('[data-busy-t]').textContent = 'Please wait…'; steps().innerHTML = ''; e.classList.remove('is-done'); e.hidden = false; document.body.classList.add('no-scroll'); this.step(text); },
+    step(text) { mark(); steps().insertAdjacentHTML('beforeend', `<li>${esc(text)}</li>`); },
+    async done(text = 'Added to your cart') {
+      const e = ensure(); mark(); e.classList.add('is-done'); e.querySelector('[data-busy-t]').textContent = text;
+      await new Promise(r => setTimeout(r, Math.max(450, 900 - (Date.now() - t0)))); this.hide();
+    },
+    hide() { if (!el) return; el.hidden = true; document.body.classList.remove('no-scroll'); },
+  };
+})();
+
 export function toast(msg) {
   let t = document.querySelector('.toast');
   if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }

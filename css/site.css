@@ -237,6 +237,25 @@ img{display:block;max-width:100%}
 .corner-tag{position:absolute;top:8px;left:8px;background:var(--ink);color:var(--yellow);font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 7px;border-radius:2px}
 @media (max-width:600px){.acct-txt small{display:none}.acct-btn{padding:0 10px 0 6px}.acct-txt strong{font-size:13px}}
 
+/* busy overlay */
+.busy{position:fixed;inset:0;z-index:70;background:#ffffffd9;backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px}
+.busy-card{width:min(400px,100%);background:#fff;border:1.5px solid var(--ink);border-radius:2px;box-shadow:0 30px 60px #0002;padding:28px 24px 0;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;overflow:hidden}
+.busy-card strong{font-family:'Big Shoulders Display',sans-serif;font-weight:900;font-size:30px;text-transform:uppercase;line-height:1}
+.busy-spin{width:56px;height:56px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--ink);border-right-color:var(--yellow);animation:busy-spin .9s linear infinite;position:relative}
+.busy.is-done .busy-spin{animation:none;border-color:#1f6b33;background:#1f6b33}
+.busy.is-done .busy-spin::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;font-weight:700}
+.busy-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:15px;align-self:stretch;text-align:left}
+.busy-steps li{display:flex;gap:10px;align-items:center;color:var(--ink)}
+.busy-steps li::before{content:'';width:14px;height:14px;flex-shrink:0;border-radius:50%;border:2px solid var(--ink);border-top-color:transparent;animation:busy-spin .8s linear infinite}
+.busy-steps li.ok{color:var(--muted)}
+.busy-steps li.ok::before{content:'✓';animation:none;border:0;width:14px;height:auto;color:#1f6b33;font-weight:700;font-size:14px;line-height:1}
+.busy-bar{align-self:stretch;margin:6px -24px 0;height:6px;overflow:hidden;background:var(--line)}
+.busy-bar span{display:block;height:100%;width:200%;background:repeating-linear-gradient(135deg,var(--yellow) 0 14px,var(--ink) 14px 28px);animation:busy-bar 1.2s linear infinite}
+.busy.is-done .busy-bar span{animation:none;background:#1f6b33}
+@keyframes busy-spin{to{transform:rotate(360deg)}}
+@keyframes busy-bar{to{transform:translateX(-39.6px)}}
+@media (prefers-reduced-motion:reduce){.busy-spin,.busy-steps li::before,.busy-bar span{animation-duration:3s!important}}
+
 /* cart drawer */
 .drawer-scrim{position:fixed;inset:0;background:#1d1d1f80;z-index:40}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);background:#fff;z-index:41;display:flex;flex-direction:column;box-shadow:-20px 0 40px #0003}

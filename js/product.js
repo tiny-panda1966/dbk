@@ -1,4 +1,4 @@
-import { mountChrome, esc, toast, openCart } from './ui.js';
+import { mountChrome, esc, toast, openCart, busy } from './ui.js';
 import { getMember, getPrefs, savePrefs, getSurplus, login, isHidden, listCategories, builderCategoryId } from './wix.js';
 import { listProducts, getProduct, addToCart, linkLines, getEmbroideryProduct, getThreads, saveDesign, getMode, IMG, IMG_FIT, money, FEATURED, findFeatured } from './wix.js';
 import { createBuilder } from './builder.js';
@@ -136,13 +136,15 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
   const miss = missing()[0];
   if (miss) { const el = root.querySelector(`[data-step="${CSS.escape(miss.key)}"]`); window.scrollTo({ top: el.getBoundingClientRect().top + scrollY - 140, behavior: 'smooth' }); return; }
   if (needsNote()) { root.querySelector('[data-t]')?.focus(); return; }
-  $$('[data-add]').forEach(x => { x.disabled = true; x.textContent = 'Adding…'; });
+  $('[data-add]').forEach(x => { x.disabled = true; x.textContent = 'Adding…'; });
+  busy.show('Checking your cap options');
   try {
     const e = builder ? await builder.snapshot() : null;
     const capTexts = { ...state.text };
     let spec = '', ref = '', tag = '';
     if (e) {
       tag = newTag();
+      busy.step(e.mode === 'upload' ? 'Uploading your logo and saving the design' : 'Saving your embroidery design and placement');
       ref = await saveDesign({ title: `${p.name} – ${e.mode === 'text' ? e.text : e.uploadName}`, embroideryRef: tag, capName: p.name, capSlug: p.slug, quantity: state.qty, mode: e.mode, text: e.text, font: e.font, thread: e.thread, size: e.scale, rotation: e.rot, placement: e.placement, locked: e.locked, uploadName: e.uploadName, logo: e.logo, preview: e.preview, status: 'New' });
       spec = embSpec(e, ref, tag);
       const tm = tagMod();
@@ -153,9 +155,11 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
     if (instr) { const tm = tagMod(); if (tm) capTexts[tm.key] = [capTexts[tm.key], instr.line].filter(Boolean).join('\n').slice(0, tm.text.max); }
     if (instr?.changed) savePrefs({ instructions: instr.text }).then(x => { prefs = x; renderInstr(); }).catch(() => {});
     const fit = [...(tag ? [`Embroidery ref: ${tag}`] : []), ...(instr ? [instr.line] : []), ...choiceMods.map(m => `${label(m)}: ${chosen(m)?.name || '—'}`), ...textMods.filter(m => state.text[m.key]?.trim()).map(m => `${m.name.replace(' (Please Specify)', '')}: ${state.text[m.key].trim()}`)];
+    busy.step(`Adding ${p.name.replace(/ Welding Cap$/, '')} to your cart`);
     const capLine = await addToCart(p, { choices: state.sel, texts: capTexts, qty: state.qty, unit: unit() - embCost(), summary: fit });
     const choice = e && embProduct?.[e.mode === 'upload' ? 'logo' : 'text'];
     if (e && choice) {
+      busy.step('Adding embroidery');
       const embLine = await addToCart(embProduct.kind === 'variant' ? { ...embProduct.product, variantId: choice.variantId } : embProduct.product, {
         choices: embProduct.kind === 'modifier' ? { [embProduct.mod.key]: choice.key } : {},
         texts: embProduct.note ? { [embProduct.note.text.key]: spec.slice(0, embProduct.note.text.max) } : {},
@@ -166,8 +170,9 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
       const embLine = await addToCart({ ...p, id: p.id + '-emb', name: `Embroidery – ${e.mode === 'text' ? 'Name | Word' : 'Logo | Image'}`, live: false, images: p.images }, { qty: state.qty, unit: embCost(), summary: [spec] });
       linkLines(capLine, embLine);
     }
+    await busy.done(e ? 'Cap and embroidery added' : 'Added to your cart');
     openCart();
-  } catch (err) { console.error(err); toast('Couldn’t add to cart. Please try again.'); }
+  } catch (err) { console.error(err); busy.hide(); toast('Couldn’t add to cart. Please try again.'); }
   $$('[data-add]').forEach(x => x.disabled = false); sync();
 });
 
