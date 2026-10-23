@@ -136,7 +136,7 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
   const miss = missing()[0];
   if (miss) { const el = root.querySelector(`[data-step="${CSS.escape(miss.key)}"]`); window.scrollTo({ top: el.getBoundingClientRect().top + scrollY - 140, behavior: 'smooth' }); return; }
   if (needsNote()) { root.querySelector('[data-t]')?.focus(); return; }
-  $('[data-add]').forEach(x => { x.disabled = true; x.textContent = 'Adding…'; });
+  $$('[data-add]').forEach(x => { x.disabled = true; x.textContent = 'Adding…'; });
   busy.show('Checking your cap options');
   try {
     const e = builder ? await builder.snapshot() : null;
