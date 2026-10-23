@@ -15,7 +15,21 @@ const MIME_OK = /^image\/(png|jpe?g|svg\+xml|webp)$/;
 const json = (b, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'content-type': 'application/json' } });
 const str = (v, n = 300) => (typeof v === 'string' ? v : v == null ? '' : String(v)).slice(0, n);
 const num = v => (Number.isFinite(+v) ? +v : 0);
-const safeName = s => str(s, 80).replace(/[^\w.\- ]+/g, '').trim() || 'file';
+const slugify = s => str(s, 200).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+// short, readable file name that keeps its extension: "<cap>-<yyyymmdd-hhmm>-<label>.<ext>"
+const fileName = (cap, label, ext) => `${slugify(cap).slice(0, 40) || 'cap'}-${new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-')}-${slugify(label).slice(0, 24) || 'file'}.${ext}`;
+const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/svg+xml': 'svg', 'image/webp': 'webp' };
+// CMS Image fields expect: wix:image://v1/<mediaId>/<fileName>#originWidth=<w>&originHeight=<h>
+function wixImage(file) {
+  const img = file?.media?.image?.image ?? file?.media?.image ?? file;
+  if (typeof img === 'string' && img.startsWith('wix:image://')) return img;
+  const o = typeof img === 'object' && img ? img : {};
+  const id = o.id || file?.id || (/media\/([^/?#]+)/.exec(o.url || file?.url || '') || [])[1];
+  if (!id) return o.url || file?.url || '';
+  const name = encodeURIComponent(o.filename || file?.displayName || id);
+  const w = o.width || file?.media?.image?.width, h = o.height || file?.media?.image?.height;
+  return `wix:image://v1/${id}/${name}${w && h ? `#originWidth=${w}&originHeight=${h}` : ''}`;
+}
 
 function decodeDataUrl(d) {
   const m = /^data:([^;,]+);base64,(.+)$/.exec(d || '');
@@ -25,22 +39,22 @@ function decodeDataUrl(d) {
   return { mime: m[1], bytes };
 }
 
-async function upload(env, dataUrl, fileName, limit) {
+async function upload(env, dataUrl, cap, label, limit) {
   const f = decodeDataUrl(dataUrl);
   if (!f) return null;
   if (!MIME_OK.test(f.mime)) throw new Error('Unsupported file type ' + f.mime);
   if (f.bytes.length > limit) throw new Error('File too large');
+  const name = fileName(cap, label, EXT[f.mime] || 'png');
   const gen = await fetch(`${WIX}/site-media/v1/files/generate-upload-url`, {
     method: 'POST', headers: { Authorization: env.WIX_API_KEY, 'wix-site-id': env.WIX_SITE_ID, 'content-type': 'application/json' },
-    body: JSON.stringify({ mimeType: f.mime, fileName, ...(env.WIX_MEDIA_FOLDER ? { parentFolderId: env.WIX_MEDIA_FOLDER } : {}) }),
+    body: JSON.stringify({ mimeType: f.mime, fileName: name, ...(env.WIX_MEDIA_FOLDER ? { parentFolderId: env.WIX_MEDIA_FOLDER } : {}) }),
   });
   if (!gen.ok) throw new Error('generate-upload-url ' + gen.status + ' ' + (await gen.text()).slice(0, 200));
   const { uploadUrl } = await gen.json();
-  const put = await fetch(`${uploadUrl}?filename=${encodeURIComponent(fileName)}`, { method: 'PUT', headers: { 'content-type': f.mime }, body: f.bytes });
+  const put = await fetch(`${uploadUrl}?filename=${encodeURIComponent(name)}`, { method: 'PUT', headers: { 'content-type': f.mime }, body: f.bytes });
   if (!put.ok) throw new Error('upload ' + put.status + ' ' + (await put.text()).slice(0, 200));
   const { file } = await put.json();
-  // CMS Image fields take a wix:image:// URI; fall back to the file URL.
-  return file?.media?.image?.image || file?.url || '';
+  return wixImage(file);
 }
 
 export async function onRequestPost({ request, env }) {
@@ -48,10 +62,9 @@ export async function onRequestPost({ request, env }) {
   let b; try { b = await request.json(); } catch (e) { return json({ error: 'Bad JSON' }, 400); }
   if (!['text', 'upload'].includes(b.mode)) return json({ error: 'Bad mode' }, 400);
   try {
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    const base = safeName(`${b.capSlug || 'cap'}-${stamp}`);
-    const preview = b.preview ? await upload(env, b.preview, `${base}-preview.jpg`, MAX.preview) : '';
-    const logo = b.mode === 'upload' && b.logo ? await upload(env, b.logo, `${base}-${safeName(b.uploadName || 'logo.png')}`, MAX.logo) : '';
+    const cap = b.capSlug || b.capName || 'cap';
+    const preview = b.preview ? await upload(env, b.preview, cap, 'preview', MAX.preview) : '';
+    const logo = b.mode === 'upload' && b.logo ? await upload(env, b.logo, cap, 'logo', MAX.logo) : '';
     const data = {
       title: str(b.title, 200), capName: str(b.capName, 200), capSlug: str(b.capSlug, 200), quantity: num(b.quantity),
       mode: str(b.mode, 20), text: str(b.text, 40), font: str(b.font, 60), thread: str(b.thread, 40),
