@@ -193,7 +193,7 @@ function renderMember(msg = '') {
   memberBox.innerHTML = `<div class="member-box">
     <div class="member-head"><strong>Welcome back${member.name ? ', ' + esc(member.name) : ''}</strong><span class="tag">Member</span></div>
     ${msg ? `<p class="member-msg">✓ ${esc(msg)}</p>` : ''}
-    ${surplusHit ? `<p class="member-msg">Member price: ${surplusHit.discountPercent}% off this cap, applied at checkout.</p>` : ''}
+    ${surplusHit ? `<p class="member-msg">Member price ${money(surplusHit.memberPrice)} (${esc(surplusHit.label)}), applied automatically at checkout.</p>` : ''}
     <div class="member-actions">
       ${prefs ? '<button type="button" class="btn-sm" data-apply>Apply my saved preferences</button>' : ''}
       <button type="button" class="btn-sm dark" data-save-prefs>Save these as my preferences</button>

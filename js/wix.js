@@ -291,8 +291,6 @@ export async function checkout() {
     const orphans = (cart?.lineItems || []).filter(li => li.catalogReference?.catalogItemId === embId && !(links[li._id] && ids.has(links[li._id]))).map(li => li._id);
     if (orphans.length) await c.currentCart.removeLineItemsFromCurrentCart(orphans);
   }
-  const coupon = sessionStorage.getItem('dbk.memberCoupon');
-  if (coupon && c.auth.loggedIn?.()) { try { await c.currentCart.updateCurrentCart({ couponCode: coupon }); } catch (e) { console.info('[DBK] Member coupon not applied (no eligible caps in cart?)', e?.message || e); } }
   const { checkoutId } = await c.currentCart.createCheckoutFromCurrentCart({ channelType: 'WEB' });
   const origin = location.origin;
   const { redirectSession } = await c.redirects.createRedirectSession({
@@ -462,7 +460,7 @@ export async function logout() {
   const c = await getClient(); let url = location.origin + '/';
   try { const r = await c.auth.logout(url); if (r?.logoutUrl) url = r.logoutUrl; } catch (e) {}
   localStorage.removeItem(TOKENS_KEY); localStorage.removeItem(LINKS_KEY);
-  sessionStorage.removeItem(MEMBER_KEY); sessionStorage.removeItem('dbk.memberCoupon');
+  sessionStorage.removeItem(MEMBER_KEY);
   location.href = url;
 }
 async function memberToken() {
@@ -497,11 +495,18 @@ export async function getMember() {
 export const getPrefs = () => memberApi('prefs').then(r => r.prefs).catch(() => null);
 export const savePrefs = p => memberApi('prefs', p).then(r => r.prefs);
 export const getOrders = () => memberApi('orders').then(r => r.orders);
+// Member surplus caps = live Wix discount rules whose name contains "member" (see /api/member). Prices shown here
+// mirror the rule; Wix applies the actual discount at checkout to eligible logged-in members.
+export function memberDeal(p, s) {
+  const price = Number(p.price) || 0;
+  if (s.type === 'FIXED_PRICE') return { memberPrice: s.fixedPrice, label: 'Member price' };
+  if (s.type === 'FIXED_AMOUNT') return { memberPrice: Math.max(0, price - s.amount), label: money(s.amount) + ' off' };
+  return { memberPrice: price * (1 - (s.percent || 0) / 100), label: (s.percent || 0) + '% off' };
+}
 export async function getSurplus() {
   const r = await memberApi('surplus');
-  if (r.coupon) sessionStorage.setItem('dbk.memberCoupon', r.coupon);
   const items = await listProducts();
-  return r.items.map(s => ({ ...s, p: items.find(p => p.id === s.product || p.slug === s.product || p.name.toLowerCase() === s.product.toLowerCase()) })).filter(s => s.p);
+  return r.items.map(s => { const p = items.find(x => x.id === s.product); return p ? { ...s, p, ...memberDeal(p, s) } : null; }).filter(Boolean);
 }
 // Re-adds every line of a past order (caps + embroidery) and re-links each embroidery to its cap by Embroidery ref.
 export async function reorder(order) {

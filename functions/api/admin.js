@@ -1,12 +1,11 @@
 // Cloudflare Pages Function: /api/admin?action=…
 // Admin-only tools. The caller's Wix member token is verified with Wix, then their login email must be in ADMIN_EMAILS.
 //   ADMIN_EMAILS  comma-separated (default: tiny.panda@tiny-panda.com)
-// Uses WIX_API_KEY / WIX_SITE_ID / WIX_SURPLUS_COLLECTION like the other functions.
+// Uses WIX_API_KEY / WIX_SITE_ID (and optional MEMBER_RULE_MATCH) like the other functions.
 
 const WIX = 'https://www.wixapis.com';
 const json = (b, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const H = env => ({ Authorization: env.WIX_API_KEY, 'wix-site-id': env.WIX_SITE_ID, 'content-type': 'application/json' });
-const SURPLUS = env => env.WIX_SURPLUS_COLLECTION || 'memberSurplus';
 const PREFS = env => env.WIX_PREFS_COLLECTION || 'memberPreferences';
 const admins = env => (env.ADMIN_EMAILS || 'tiny.panda@tiny-panda.com').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
@@ -26,35 +25,45 @@ async function verifyAdmin(request, env) {
   return admins(env).includes(email) ? { member: m, email } : { status: 403, email };
 }
 
-async function listSurplus(env) {
-  const out = []; let offset = 0;
-  for (;;) {
-    const j = await wix(env, '/wix-data/v2/items/query', { dataCollectionId: SURPLUS(env), query: { sort: [{ fieldName: 'sortOrder', order: 'ASC' }], paging: { limit: 100, offset } } });
-    const items = j.dataItems || [];
-    out.push(...items.map(i => ({ id: i.id || i._id, product: i.data?.product || '', discountPercent: Number(i.data?.discountPercent) || 0, active: !!i.data?.active, sortOrder: Number(i.data?.sortOrder) || 0 })));
-    if (items.length < 100) break; offset += 100;
+// ---- Wix automatic discount rules (Marketing → Discounts). Source of truth for member surplus prices. ----
+// A rule counts as a member surplus rule when its name contains MEMBER_RULE_MATCH (default "member", e.g. "memberSale").
+// Who gets the discount (members / labelled contacts) is set on the rule in the Wix dashboard; checkout applies it.
+const RULE_MATCH = env => (env.MEMBER_RULE_MATCH || 'member').toLowerCase();
+async function discountRules(env) {
+  const out = []; let cursor = null;
+  for (let i = 0; i < 10; i++) {
+    const j = await wix(env, '/ecom/v1/discount-rules/query', { query: { cursorPaging: cursor ? { limit: 100, cursor } : { limit: 100 } } });
+    out.push(...(j.discountRules || []));
+    cursor = j.pagingMetadata?.cursors?.next; if (!cursor) break;
   }
   return out;
 }
-
-async function saveSurplus(env, rows) {
-  if (!Array.isArray(rows)) throw new Error('items must be an array');
-  const current = await listSurplus(env);
-  const keep = new Set();
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    const data = { product: String(r.product || '').slice(0, 200), discountPercent: Math.max(0, Math.min(90, Number(r.discountPercent) || 0)), active: !!r.active, sortOrder: i + 1 };
-    if (!data.product) continue;
-    if (r.id && current.some(c => c.id === r.id)) {
-      keep.add(r.id);
-      await wix(env, `/wix-data/v2/items/${r.id}`, { dataCollectionId: SURPLUS(env), dataItem: { id: r.id, data: { _id: r.id, ...data } } }, 'PUT');
-    } else {
-      const j = await wix(env, '/wix-data/v2/items', { dataCollectionId: SURPLUS(env), dataItem: { data } });
-      keep.add(j.dataItem?.id || j.dataItem?._id);
-    }
+function ruleLive(r) {
+  if (r.active === false) return false;
+  const now = Date.now(), t = r.activeTimeInfo || {};
+  if (t.start && Date.parse(t.start) > now) return false;
+  if (t.end && Date.parse(t.end) < now) return false;
+  return true;
+}
+function ruleItems(r) {
+  const res = [];
+  for (const d of r.discounts?.values || []) {
+    const ids = new Set();
+    const walk = o => { if (!o || typeof o !== 'object') return; if (Array.isArray(o.catalogItemIds)) o.catalogItemIds.forEach(x => typeof x === 'string' && ids.add(x)); Object.values(o).forEach(walk); };
+    walk(d.specificItemsInfo || d);
+    const type = d.discountType || 'PERCENTAGE';
+    const val = { type, percent: type === 'PERCENTAGE' ? Number(d.percentage) || 0 : null, amount: type === 'FIXED_AMOUNT' ? Number(d.fixedAmount) || 0 : null, fixedPrice: type === 'FIXED_PRICE' ? Number(d.fixedPrice) || 0 : null };
+    ids.forEach(id => res.push({ product: id, ...val }));
   }
-  for (const c of current) if (!keep.has(c.id)) await wix(env, `/wix-data/v2/items/${c.id}?dataCollectionId=${encodeURIComponent(SURPLUS(env))}`, null, 'DELETE');
-  return listSurplus(env);
+  return res;
+}
+
+async function listRules(env) {
+  const match = RULE_MATCH(env);
+  return (await discountRules(env)).map(r => ({
+    id: r.id || r._id, name: r.name || '', live: ruleLive(r), member: (r.name || '').toLowerCase().includes(match),
+    start: r.activeTimeInfo?.start || '', end: r.activeTimeInfo?.end || '', items: ruleItems(r),
+  }));
 }
 
 async function listInstructions(env) {
@@ -85,10 +94,7 @@ export async function onRequest({ request, env }) {
   const action = new URL(request.url).searchParams.get('action');
   try {
     if (action === 'whoami') return json({ admin: true, email: a.email });
-    if (action === 'surplus') {
-      if (request.method === 'POST') return json({ items: await saveSurplus(env, (await request.json()).items) });
-      return json({ items: await listSurplus(env) });
-    }
+    if (action === 'rules') return json({ rules: await listRules(env), match: RULE_MATCH(env) });
     if (action === 'instructions') {
       if (request.method === 'POST') return json(await confirmInstructions(env, await request.json()));
       return json({ items: await listInstructions(env) });

@@ -118,12 +118,12 @@ if (!member) {
     if (!list.length) return;
     root.querySelector('[data-surplus]').innerHTML = `
       <div class="section-head" style="margin-top:56px"><h2 class="display">Member surplus caps</h2><span class="kicker">Ready-made · members only</span></div>
-      <div class="grid">${list.map(({ p, discountPercent }) => `
+      <div class="grid">${list.map(({ p, memberPrice, label }) => `
         <article class="card">
-          <a href="${productUrl(p)}" class="card-img tagged"><img loading="lazy" src="${IMG(p.images[0], 500)}" alt="${esc(p.name)}"><span class="corner-tag">${discountPercent}% off</span></a>
-          <div class="card-text"><a href="${productUrl(p)}" class="clamp2 card-name">${esc(p.name)}</a><span class="mono"><s class="muted">${money(p.price)}</s> ${money(p.price * (1 - discountPercent / 100))}</span></div>
+          <a href="${productUrl(p)}" class="card-img tagged"><img loading="lazy" src="${IMG(p.images[0], 500)}" alt="${esc(p.name)}"><span class="corner-tag">${esc(label)}</span></a>
+          <div class="card-text"><a href="${productUrl(p)}" class="clamp2 card-name">${esc(p.name)}</a><span class="mono"><s class="muted">${money(p.price)}</s> ${money(memberPrice)}</span></div>
           <a href="${productUrl(p)}" class="btn btn-outline btn-block card-btn">View cap</a>
         </article>`).join('')}</div>
-      <p class="note" style="margin-top:16px">The member discount is applied at checkout.</p>`;
+      <p class="note" style="margin-top:16px">Your member discount is applied automatically at checkout while you're logged in.</p>`;
   }).catch(() => {});
 }

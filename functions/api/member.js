@@ -5,15 +5,13 @@
 //
 // Uses the same variables as /api/embroidery, plus optional:
 //   WIX_PREFS_COLLECTION    (default memberPreferences)
-//   WIX_SURPLUS_COLLECTION  (default memberSurplus)
-//   MEMBER_COUPON           Wix coupon code applied at checkout for members (scoped to surplus caps in Wix)
+//   MEMBER_RULE_MATCH       text in a Wix discount rule's name that marks it as a member surplus rule (default "member")
 
 const WIX = 'https://www.wixapis.com';
 const json = (b, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const H = env => ({ Authorization: env.WIX_API_KEY, 'wix-site-id': env.WIX_SITE_ID, 'content-type': 'application/json' });
 const str = (v, n = 200) => (typeof v === 'string' ? v : v == null ? '' : String(v)).slice(0, n);
 const PREFS = env => env.WIX_PREFS_COLLECTION || 'memberPreferences';
-const SURPLUS = env => env.WIX_SURPLUS_COLLECTION || 'memberSurplus';
 // Wix Stores option name → CMS field
 const OPTION_FIELDS = { 'Cap Size': 'capSize', 'Cap Liner Color': 'linerColour', 'Liner Type': 'linerType', 'Cap Length': 'capLength', 'Batting in Bill?': 'batting', 'Bill Size': 'billSize' };
 
@@ -22,6 +20,39 @@ async function wix(env, path, body, method = 'POST') {
   const t = await r.text();
   if (!r.ok) throw new Error(`${path} ${r.status} ${t.slice(0, 300)}`);
   return t ? JSON.parse(t) : {};
+}
+
+// ---- Wix automatic discount rules (Marketing → Discounts). Source of truth for member surplus prices. ----
+// A rule counts as a member surplus rule when its name contains MEMBER_RULE_MATCH (default "member", e.g. "memberSale").
+// Who gets the discount (members / labelled contacts) is set on the rule in the Wix dashboard; checkout applies it.
+const RULE_MATCH = env => (env.MEMBER_RULE_MATCH || 'member').toLowerCase();
+async function discountRules(env) {
+  const out = []; let cursor = null;
+  for (let i = 0; i < 10; i++) {
+    const j = await wix(env, '/ecom/v1/discount-rules/query', { query: { cursorPaging: cursor ? { limit: 100, cursor } : { limit: 100 } } });
+    out.push(...(j.discountRules || []));
+    cursor = j.pagingMetadata?.cursors?.next; if (!cursor) break;
+  }
+  return out;
+}
+function ruleLive(r) {
+  if (r.active === false) return false;
+  const now = Date.now(), t = r.activeTimeInfo || {};
+  if (t.start && Date.parse(t.start) > now) return false;
+  if (t.end && Date.parse(t.end) < now) return false;
+  return true;
+}
+function ruleItems(r) {
+  const res = [];
+  for (const d of r.discounts?.values || []) {
+    const ids = new Set();
+    const walk = o => { if (!o || typeof o !== 'object') return; if (Array.isArray(o.catalogItemIds)) o.catalogItemIds.forEach(x => typeof x === 'string' && ids.add(x)); Object.values(o).forEach(walk); };
+    walk(d.specificItemsInfo || d);
+    const type = d.discountType || 'PERCENTAGE';
+    const val = { type, percent: type === 'PERCENTAGE' ? Number(d.percentage) || 0 : null, amount: type === 'FIXED_AMOUNT' ? Number(d.fixedAmount) || 0 : null, fixedPrice: type === 'FIXED_PRICE' ? Number(d.fixedPrice) || 0 : null };
+    ids.forEach(id => res.push({ product: id, ...val }));
+  }
+  return res;
 }
 
 async function verifyMember(request) {
@@ -95,13 +126,17 @@ async function orders(env, member) {
 }
 
 async function surplus(env) {
-  const j = await wix(env, '/wix-data/v2/items/query', { dataCollectionId: SURPLUS(env), query: { filter: { active: { $eq: true } }, sort: [{ fieldName: 'sortOrder', order: 'ASC' }], paging: { limit: 100 } } });
-  return (j.dataItems || []).map(i => ({ product: str(i.data?.product, 200).trim(), discountPercent: Number(i.data?.discountPercent) || 15 })).filter(i => i.product);
+  const seen = new Set(), out = [];
+  for (const r of await discountRules(env)) {
+    if (!ruleLive(r) || !(r.name || '').toLowerCase().includes(RULE_MATCH(env))) continue;
+    for (const it of ruleItems(r)) if (!seen.has(it.product)) { seen.add(it.product); out.push({ ...it, rule: r.name || '' }); }
+  }
+  return out;
 }
 
 export async function onRequest({ request, env }) {
   const action = new URL(request.url).searchParams.get('action');
-  if (action === 'ping') return json({ ok: true, configured: !!(env.WIX_API_KEY && env.WIX_SITE_ID), prefs: PREFS(env), surplus: SURPLUS(env), coupon: !!env.MEMBER_COUPON });
+  if (action === 'ping') return json({ ok: true, configured: !!(env.WIX_API_KEY && env.WIX_SITE_ID), prefs: PREFS(env), memberRuleMatch: RULE_MATCH(env) });
   if (!env.WIX_API_KEY || !env.WIX_SITE_ID) return json({ error: 'Server not configured' }, 501);
   const member = await verifyMember(request);
   if (!member) return json({ error: 'Not logged in' }, 401);
@@ -112,7 +147,7 @@ export async function onRequest({ request, env }) {
         if (request.method === 'POST') return json({ prefs: await savePrefs(env, member, await request.json()) });
         return json({ prefs: toClient(await findPrefs(env, member._id || member.id)) });
       case 'orders': return json({ orders: await orders(env, member) });
-      case 'surplus': return json({ items: await surplus(env), coupon: env.MEMBER_COUPON || '' });
+      case 'surplus': return json({ items: await surplus(env) });
       default: return json({ error: 'Unknown action' }, 400);
     }
   } catch (e) { return json({ error: String(e.message || e) }, 502); }

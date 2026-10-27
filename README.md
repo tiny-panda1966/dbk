@@ -76,16 +76,14 @@ The CMS item ID is written on the order line as "Design ref". Each embroidered c
 | instructionsConfirmed | Text | **Kelly writes this** – the clear wording used on every order |
 | instructionsStatus | Text | `awaiting` (set by site when the customer changes their words) → Kelly sets `confirmed` |
 
-**4. CMS collection `memberSurplus`** (Kelly's list). Permissions: Admin. Fields: `product` (Text – product name, slug or ID), `discountPercent` (Number, e.g. 15), `active` (Boolean), `sortOrder` (Number).
-
-**5. Member discount at checkout (optional).** Create a Wix coupon limited to the surplus caps (e.g. 15%, one use per customer) and put its code in Cloudflare variable `MEMBER_COUPON`. It's only sent to logged-in members and applied automatically at checkout.
+**4. Member surplus caps = Wix automatic discounts.** In the Wix dashboard go to Marketing → Discounts → Automatic discounts and create a rule per sale (e.g. `memberSale`): apply to **specific products**, set the % (or amount / fixed price), and limit **who it applies to** to members (labelled contacts / segment). Any **active** rule whose name contains `member` (change with Cloudflare variable `MEMBER_RULE_MATCH`) appears as surplus caps on the member account page and as a member price on those product pages. Wix applies the discount itself at checkout, so the site and checkout always match; guests pay full price. The Wix API key needs the **Manage eCommerce** permission to read discount rules. The old `memberSurplus` collection and `MEMBER_COUPON` variable are no longer used and can be deleted.
 
 Check `/diagnostics.html` → "Member function" should show `configured: true`.
 
 ## Admin – `/admin.html`
 Log in with an admin account (default **tiny.panda@tiny-panda.com**; set `ADMIN_EMAILS` in Cloudflare as a comma-separated list to change it). Admins also see an **Admin** button on their account page.
 - **Special instructions** (opens first, with a count of how many are waiting): every member instruction from `memberPreferences`, filtered by Awaiting / Confirmed / All. Kelly reads what the customer wrote, types the clear wording (or "Use customer's words"), and clicks **Confirm**. That sets `instructionsConfirmed` + `instructionsStatus = confirmed`, and it goes on every order from that customer. "Mark as awaiting" reopens one. If the customer changes their words, it goes back to Awaiting automatically.
-- **Member surplus caps:** search or pick a category to add any product, set the discount %, switch it active or inactive, reorder by dragging (or the ↑ ↓ buttons), remove, then **Save changes**. It writes the `memberSurplus` collection (product = product ID, sortOrder = list order).
+- **Member discounts** (read-only): lists the Wix automatic discount rules, which caps each covers, the member price and whether it's live. Edit them in the Wix dashboard.
 - `functions/api/admin.js` checks the Wix login and admin email on every request, so non-admins get "No access".
 
 ## Contact, FAQs, policy, social
