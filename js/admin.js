@@ -50,9 +50,9 @@ async function mountSurplus(el) {
     const ruleHtml = r => `
       <div class="panel" style="margin-bottom:16px">
         <div class="panel-head"><h2>${esc(r.name || 'Untitled rule')}</h2>${status(r)}</div>
-        ${r.items.length ? `<ol class="adm-rows">${r.items.map(it => { const p = find(it.product); if (!p) return `<li class="adm-row"><span class="adm-prod"><span class="pick-img"></span><span><strong>${esc(it.product)}</strong><small class="err">Not found in the store (hidden or deleted?)</small></span></span></li>`;
+        ${r.items.length ? `<ol class="adm-rows">${r.items.map(it => { const p = find(it.product); if (!p) return `<li class="adm-row" style="grid-template-columns:minmax(0,1fr) auto minmax(80px,auto);gap:16px;align-items:center"><span class="adm-prod" style="display:flex;align-items:center;gap:12px;min-width:0"><span class="pick-img"></span><span><strong>${esc(it.product)}</strong><small class="err">Not found in the store (hidden or deleted?)</small></span></span></li>`;
           const [price, label] = deal(p, it);
-          return `<li class="adm-row"><span class="adm-prod"><span class="pick-img" style="background-image:url('${IMG(p.images[0], 120)}')"></span><span><strong>${esc(p.name)}</strong><small class="muted">${money(p.price)}</small></span></span><span class="mono">${esc(label)}</span><span class="mono adm-price">${money(price)}</span></li>`; }).join('')}</ol>`
+          return `<li class="adm-row" style="grid-template-columns:minmax(0,1fr) auto minmax(80px,auto);gap:16px;align-items:center"><span class="adm-prod" style="display:flex;align-items:center;gap:12px;min-width:0"><span class="pick-img" style="background-image:url('${IMG(p.images[0], 120)}')"></span><span><strong>${esc(p.name)}</strong><small class="muted">${money(p.price)}</small></span></span><span class="mono">${esc(label)}</span><span class="mono adm-price" style="font-weight:700;text-align:right">${money(price)}</span></li>`; }).join('')}</ol>`
           : '<p class="pad-s note">This rule isn’t limited to specific products, so it isn’t listed as a surplus cap.</p>'}
       </div>`;
     box.innerHTML = (member.length ? member.map(ruleHtml).join('') : `<p class="muted">No discount rules with “${esc(out.match)}” in the name yet.</p>`)
