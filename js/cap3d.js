@@ -1,5 +1,5 @@
 let THREE;
-const HALF = Math.PI / 2, FLAP = { maxA: 92 * Math.PI / 180, len: 0.56, flare: 16 * Math.PI / 180, r0: 1.01 }, CROWN_Y = 0.98;
+const HALF = Math.PI / 2, FLAP = { maxA: 92 * Math.PI / 180, len: 0.56, flare: 16 * Math.PI / 180, r0: 1.01 }, CROWN_Y = 1.1;
 const VIEWS = { front: [0, 0.2], right: [-Math.PI / 2, 0.15], back: [Math.PI, 0.2], left: [Math.PI / 2, 0.15], top: [0, 1.15] };
 
 function weaveTexture() {
@@ -93,18 +93,19 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
   const bandMat = new THREE.MeshStandardMaterial({ color: 0xeeeeeb, map: weave, roughness: 0.92 });
   const liner = new THREE.MeshStandardMaterial({ color: 0x1f1f20, roughness: 0.95, side: THREE.BackSide });
   const seamMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4 });
+  // Crown panel seams: dashed stitching like the band (welding caps have no top button). Dash sizes allow for the crown's vertical scale.
+  const crownStitch = new THREE.LineDashedMaterial({ color: 0x000000, transparent: true, opacity: 0.45, dashSize: 0.024, gapSize: 0.017 });
   const stitchMat = new THREE.LineDashedMaterial({ color: 0x000000, transparent: true, opacity: 0.45, dashSize: 0.025, gapSize: 0.018 });
 
-  const crown = new THREE.Group(); crown.scale.set(1, 0.98, 1); cap.add(crown);
+  const crown = new THREE.Group(); crown.scale.set(1, CROWN_Y, 1); cap.add(crown);
   const domeGeo = new THREE.SphereGeometry(1, 96, 48, 0, Math.PI * 2, 0, Math.PI / 2);
   const dome = new THREE.Mesh(domeGeo, fabric); crown.add(dome);
   crown.add(new THREE.Mesh(domeGeo, liner));
   for (let i = 0; i < 6; i++) {
     const phi = (i * Math.PI) / 3 + Math.PI / 6, pts = [];
     for (let k = 0; k <= 40; k++) { const th = (k / 40) * (Math.PI / 2); pts.push(new THREE.Vector3(-Math.cos(phi) * Math.sin(th), Math.cos(th), Math.sin(phi) * Math.sin(th)).multiplyScalar(1.003)); }
-    crown.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), seamMat));
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.slice(1)), crownStitch); l.computeLineDistances(); crown.add(l);
   }
-  const btn = new THREE.Mesh(new THREE.SphereGeometry(0.055, 20, 12), bandMat); btn.position.y = 1.0; btn.scale.y = 0.55; crown.add(btn);
 
   const bandH = 0.36;
   const bandGeo = new THREE.CylinderGeometry(1.0, 1.01, bandH, 96, 1, true);
@@ -142,7 +143,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
   let patReq = 0;
   let flapK = 1;
   let place = { phi: Math.PI / 2, s: 1.02 }, emb = null, locked = false, hover = false, dragging = null;
-  let yaw = 0.75, pitch = 0.2, tYaw = yaw, tPitch = pitch;
+  let yaw = VIEWS.front[0], pitch = VIEWS.front[1], tYaw = yaw, tPitch = pitch;
 
   function sizeAngle() { return 0.62 * ((emb && emb.scale) || 1); }
   // Whole-cap surface param: phi around the head, s = distance down from the button (crown → band → flap).
@@ -315,6 +316,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
   }
   const ro = new ResizeObserver(resize); ro.observe(el); resize();
+  window.addEventListener('resize', resize); requestAnimationFrame(resize); setTimeout(resize, 250);
 
   let raf, alive = true, lastFrame = 0;
   function frame() {
@@ -333,7 +335,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     },
     // look: { mode: 'white'|'colour'|'print', fabric: hex, pattern: url, seam: hex }
     async setAppearance({ mode, fabric: fx, pattern, seam }) {
-      if (seam) { seamMat.color.set(seam); stitchMat.color.set(seam); const lum = new THREE.Color(seam).getHSL({}).l; seamMat.opacity = stitchMat.opacity = lum > 0.6 ? 0.95 : 0.6; }
+      if (seam) { seamMat.color.set(seam); stitchMat.color.set(seam); crownStitch.color.set(seam); const lum = new THREE.Color(seam).getHSL({}).l; seamMat.opacity = stitchMat.opacity = crownStitch.opacity = lum > 0.6 ? 0.95 : 0.6; }
       const req = ++patReq;
       const apply = (tex, col) => fabricMeshes.forEach(([m, r]) => {
         if (tex) { const t = tex.clone(); t.needsUpdate = true; t.repeat.set(r[0], r[1]); m.map = t; } else m.map = weave;
@@ -363,8 +365,9 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
       tYaw = tYaw + ((((target - tYaw) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI);
       tPitch = place.s > HALF ? 0.05 : 0.3; onView && onView(nearestView());
     },
+    resize,
     describe,
     capture() { renderer.render(scene, camera); return cv.toDataURL('image/png'); },
-    destroy() { alive = false; cancelAnimationFrame(raf); clearInterval(fallback); ro.disconnect(); renderer.dispose(); cv.remove(); },
+    destroy() { window.removeEventListener('resize', resize); alive = false; cancelAnimationFrame(raf); clearInterval(fallback); ro.disconnect(); renderer.dispose(); cv.remove(); },
   };
 }
