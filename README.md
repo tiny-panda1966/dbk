@@ -122,7 +122,7 @@ No other code changes are needed; everything account-specific is in `js/config.j
 Admin → **Popular prints** picks the four welding caps shown under "Popular prints" in the Welding caps menu. Saved to the Wix CMS collection **`siteSettings`** (Text fields `key`, `value`; permission **Read: Anyone**), item key `popularPrints`. If nothing is saved, the built-in featured caps are shown. Optional Cloudflare variable `WIX_SETTINGS_COLLECTION` to rename the collection.
 
 ## Product info sections
-Each product's Wix Stores **Additional info sections** are shown on its product page as expandable sections. The DBK returns summary is added only when the product has no info section about returns, refunds or exchanges.
+Each product's Wix Stores **info sections** are shown on its product page as expandable sections. If Wix Headless returns none (e.g. on the test site, where info sections weren't imported), they come from **`data/info-sections.json`**, built from DBK's exported info sections and product list (9 sections, 2,230 products, matched by product name). On Kelly's own Wix account the live sections are used. The DBK returns summary is added only when the product has no info section about returns, refunds or exchanges.
 
 ## Stitch colours
 Caps with **"Solid"** in the name show a Stitch colour picker using `stitchColours` in `js/config.js` (names must match the embroidery thread colours). The cap's own colour is left out. The chosen colour is added to the cap's order notes.

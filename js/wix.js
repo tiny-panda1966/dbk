@@ -193,7 +193,19 @@ export async function getVariants(productId, raw) {
   } catch (e) { console.warn('[DBK] Variant query failed:', e); return (fromRaw || []).map(nv); }
 }
 
+// Info sections: live from Wix Headless when available, otherwise from data/info-sections.json
+// (DBK's exported Wix info sections, matched by product name).
+let infoPromise = null;
+const localInfo = () => infoPromise || (infoPromise = fetch('data/info-sections.json').then(r => r.ok ? r.json() : null).catch(() => null));
 export async function getProduct(slug) {
+  const p = await getProductBase(slug);
+  if (p && !(p.info || []).length) {
+    const d = await localInfo(), combo = d?.products?.[(p.name || '').trim().toLowerCase()];
+    if (combo != null) p.info = (d.combos[combo] || []).map(id => d.sections[id]).filter(s => s && s.lines.length);
+  }
+  return p;
+}
+async function getProductBase(slug) {
   const c = await getClient();
   if (c) {
     try {
