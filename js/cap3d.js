@@ -1,6 +1,7 @@
 let THREE;
 const HALF = Math.PI / 2, FLAP = { maxA: 92 * Math.PI / 180, len: 0.56, flare: 16 * Math.PI / 180, r0: 1.01 }, CROWN_Y = 1.1;
-const VIEWS = { front: [0, 0.2], right: [-Math.PI / 2, 0.15], back: [Math.PI, 0.2], left: [Math.PI / 2, 0.15], top: [0, 1.15] };
+// Front = peak side opposite the hanging flap (flap covers the neck at the back).
+const VIEWS = { front: [Math.PI, 0.2], right: [Math.PI / 2, 0.15], back: [0, 0.2], left: [-Math.PI / 2, 0.15], top: [Math.PI, 1.15] };
 
 function weaveTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 128;
@@ -142,7 +143,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
   const fabricMeshes = [[fabric, [6, 2.2]], [bandMat, [7, 0.5]], [flapMat, [3.6, 0.7]]];
   let patReq = 0;
   let flapK = 1;
-  let place = { phi: Math.PI / 2, s: 1.02 }, emb = null, locked = false, hover = false, dragging = null;
+  let place = { phi: Math.PI * 1.5, s: 1.02 }, emb = null, locked = false, hover = false, dragging = null;
   let yaw = VIEWS.front[0], pitch = VIEWS.front[1], tYaw = yaw, tPitch = pitch;
 
   function sizeAngle() { return 0.62 * ((emb && emb.scale) || 1); }
@@ -299,11 +300,11 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
   function nearestView() {
     if (tPitch > 0.85) return 'top';
     const y = ((tYaw % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
-    const opts = [['front', 0], ['right', -Math.PI / 2], ['back', Math.PI], ['back', -Math.PI], ['left', Math.PI / 2]];
+    const opts = [['back', 0], ['left', -Math.PI / 2], ['front', Math.PI], ['front', -Math.PI], ['right', Math.PI / 2]];
     return opts.reduce((b, o) => (Math.abs(o[1] - y) < Math.abs(b[1] - y) ? o : b))[0];
   }
   function describe() {
-    const az = THREE.MathUtils.radToDeg(place.phi - Math.PI / 2);
+    const az = THREE.MathUtils.radToDeg(place.phi + Math.PI / 2);
     const a = ((az + 540) % 360) - 180, reg = region(place);
     const side = Math.abs(a) < 20 ? 'Front' : Math.abs(a) > 160 ? 'Back' : a > 0 ? 'Wearer’s left' : 'Wearer’s right';
     const up = Math.round(THREE.MathUtils.radToDeg(HALF - place.s));
