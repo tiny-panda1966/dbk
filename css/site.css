@@ -133,6 +133,7 @@ img{display:block;max-width:100%}
 .seam-sw{display:flex;gap:6px;flex-wrap:wrap}
 .seg-wrap{flex-direction:column;align-items:flex-start;gap:8px}
 .note.copyright{background:#fffbe6;border-left:0;padding:10px 12px;border-radius:2px;color:var(--ink)}
+.pdp-info-sections{margin-top:8px}
 .pdp-more{border-top:1px solid var(--line)}
 .pdp-more:last-of-type{border-bottom:1px solid var(--line)}
 .pp-slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:16px}
