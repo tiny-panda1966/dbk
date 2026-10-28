@@ -17,13 +17,15 @@ if (!member) {
   if (who) {
     root.innerHTML = `<div class="pad-x admin-tabs-wrap"><div class="admin-tabs" role="tablist">
       <button type="button" role="tab" data-atab="instr">Special instructions <span class="tag" data-acount hidden></span></button>
-      <button type="button" role="tab" data-atab="surplus">Member discounts</button></div></div>
-      <div data-apanel="instr"></div><div data-apanel="surplus" hidden></div>`;
+      <button type="button" role="tab" data-atab="surplus">Member discounts</button>
+      <button type="button" role="tab" data-atab="popular">Popular prints</button></div></div>
+      <div data-apanel="instr"></div><div data-apanel="surplus" hidden></div><div data-apanel="popular" hidden></div>`;
     const show = k => { root.querySelectorAll('[data-atab]').forEach(b => { b.classList.toggle('on', b.dataset.atab === k); b.setAttribute('aria-selected', b.dataset.atab === k); }); root.querySelectorAll('[data-apanel]').forEach(p => p.hidden = p.dataset.apanel !== k); history.replaceState(null, '', '#' + k); };
     root.querySelectorAll('[data-atab]').forEach(b => b.onclick = () => show(b.dataset.atab));
-    show(location.hash === '#surplus' ? 'surplus' : 'instr');
+    show(['#surplus', '#popular'].includes(location.hash) ? location.hash.slice(1) : 'instr');
     mountInstructions(root.querySelector('[data-apanel="instr"]'));
     mountSurplus(root.querySelector('[data-apanel="surplus"]'));
+    mountPopular(root.querySelector('[data-apanel="popular"]'));
   }
 }
 
@@ -60,6 +62,34 @@ async function mountSurplus(el) {
   }
   el.querySelector('[data-reload]').onclick = load;
   load();
+}
+
+// The four caps shown under "Popular prints" in the Welding caps mega menu (saved to the siteSettings CMS collection).
+async function mountPopular(el) {
+  el.innerHTML = `<section class="pad admin">
+    <div class="acct-head"><div><span class="kicker">DBK admin · ${esc(member.email || '')}</span><h1 class="display">Popular prints</h1>
+      <span class="muted">Choose the four welding caps shown in the Welding caps menu, in order. Leave a slot empty to skip it.</span></div>
+      <div class="hero-ctas"><button type="button" class="btn btn-dark" data-pp-save>Save</button></div></div>
+    <div data-pp><p class="muted">Loading…</p></div></section>`;
+  const box = el.querySelector('[data-pp]');
+  let items, ids;
+  try { [items, { ids }] = await Promise.all([listProducts(), api('popular')]); }
+  catch (e) { box.innerHTML = `<p class="err">Couldn’t load: ${esc(e.message)}</p><p class="note">Create the CMS collection “siteSettings” with Text fields key and value (Read: Anyone).</p>`; return; }
+  const caps = items.filter(p => /welding cap/i.test(p.name)).sort((a, b) => a.name.localeCompare(b.name));
+  const sel = [0, 1, 2, 3].map(i => ids[i] || '');
+  const render = () => {
+    box.innerHTML = `<div class="pp-slots">${sel.map((id, i) => { const p = caps.find(x => x.id === id);
+      return `<div class="pp-slot"><span class="kicker">${i + 1}</span><span class="pick-img" style="${p ? `background-image:url('${IMG(p.images[0], 300)}')` : ''}"></span>
+        <select data-slot="${i}" aria-label="Popular print ${i + 1}"><option value="">— None —</option>${caps.map(c => `<option value="${esc(c.id)}"${c.id === id ? ' selected' : ''}>${esc(c.name.replace(/ Welding Cap$/, ''))}</option>`).join('')}</select></div>`; }).join('')}</div>`;
+    box.querySelectorAll('[data-slot]').forEach(s => s.onchange = () => { sel[+s.dataset.slot] = s.value; render(); });
+  };
+  render();
+  el.querySelector('[data-pp-save]').onclick = async e => {
+    const btn = e.currentTarget; btn.disabled = true; btn.textContent = 'Saving…';
+    try { await api('popular', { ids: sel.filter(Boolean) }); toast('Popular prints saved'); }
+    catch (err) { toast('Couldn’t save: ' + err.message); }
+    btn.disabled = false; btn.textContent = 'Save';
+  };
 }
 
 async function mountInstructions(el) {

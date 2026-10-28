@@ -60,7 +60,8 @@ root.innerHTML = `
         <h1 class="display">${esc(p.name)}</h1>
         <span class="price mono" data-price></span>
         ${p.description.length ? `<div class="pdp-desc">${p.description.map(t => `<p>${esc(t)}</p>`).join('')}</div>` : ''}
-        ${policyInfoHtml()}
+        ${(p.info || []).map(s => `<details class="pdp-more"><summary>${esc(s.title)}</summary><div class="pdp-more-body">${s.lines.map(t => `<p>${esc(t)}</p>`).join('')}</div></details>`).join('')}
+        ${(p.info || []).some(s => /return|refund|exchange/i.test(s.title)) ? '' : policyInfoHtml()}
       </div>
       <div data-member-box></div>
       ${choiceMods.map((m, i) => `

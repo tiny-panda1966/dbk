@@ -1,6 +1,7 @@
 // 3D cap builder + embroidery designer. Wraps js/cap3d.js (three.js) and renders its own controls.
 import { esc } from './ui.js';
 import { money } from './wix.js';
+import { CONFIG } from './config.js';
 
 const BASE = { Black: '#1b1b1c', Blue: '#2753c8', Brown: '#6b4a2e', Cream: '#efe4c8', Gray: '#8e8d8a', Green: '#1f8a3b', Orange: '#e8641c', Pink: '#e678a6', Purple: '#6a3d9a', Red: '#c62a22', White: '#f4f4f1', Yellow: '#f2c200', Peach: '#f3b58a', Maroon: '#6b1f2a' };
 const mix = (hex, to, t) => { const a = parseInt(hex.slice(1), 16), b = parseInt(to.slice(1), 16); return '#' + [16, 8, 0].map(s => Math.round(((a >> s) & 255) * (1 - t) + ((b >> s) & 255) * t).toString(16).padStart(2, '0')).join(''); };
@@ -10,6 +11,8 @@ export const threadHex = n => {
   const base = BASE[n.split(' ')[0]] || '#888888';
   return n.includes('(Dark)') ? mix(base, '#000000', 0.35) : n.includes('(Light)') ? mix(base, '#ffffff', 0.4) : base;
 };
+// Uses the same thread colours as embroidery (CONFIG.stitchColours).
+export const STITCHES = (CONFIG.stitchColours || []).map(n => [n, threadHex(n)]);
 
 const FONT_DEFS = [
   ['Yellowtail', 'Script'], ['Pacifico', 'Script'], ['Great Vibes', 'Script'], ['Dancing Script', 'Script', 700], ['Kaushan Script', 'Script'], ['Satisfy', 'Script'], ['Lobster', 'Script'], ['Allura', 'Script'], ['Sacramento', 'Script'], ['Mr Dafoe', 'Script'],
@@ -22,13 +25,9 @@ const FONT_DEFS = [
 export const FONTS = FONT_DEFS.map(([name, cat, weight]) => ({ name, cat, weight: weight || 400, family: `'${name}', ${cat === 'Script' ? 'cursive' : 'sans-serif'}` }));
 const CATS = ['All', 'Script', 'Varsity', 'Western', 'Block', 'Classic', 'Fun'];
 // Stitch thread colours offered on SOLID fabric caps (printed caps keep the standard stitch). The cap's own colour is left out.
-export const STITCHES = [['Black', '#1d1d1f'], ['White', '#ffffff'], ['Gray', '#8e8d8a'], ['Navy', '#1f2f5c'], ['Royal Blue', '#2753c8'], ['Light Blue', '#7fb3e6'], ['Red', '#c62a22'], ['Maroon', '#6e1f2a'], ['Orange', '#e8641c'], ['Yellow', '#f2c200'], ['Gold', '#c9a13b'], ['Kelly Green', '#1f8a3b'], ['Brown', '#6b4a2e'], ['Pink', '#e678a6']];
-// A cap counts as solid when its name is just a colour (e.g. "Black Welding Cap", "Solid Navy Welding Cap").
-export const isSolidCap = product => {
-  const n = (product.name || '').replace(/welding cap/i, '').replace(/\bsolid\b/i, '').trim().toLowerCase();
-  return /\bsolid\b/i.test(product.name || '') || (!!n && [...Object.keys(BASE), ...STITCHES.map(x => x[0])].some(c => c.toLowerCase() === n));
-};
-const sameColour = (a, b) => a.toLowerCase().split(' ').pop() === (b || '').toLowerCase().split(' ').pop();
+// A cap is solid when "Solid" is in its name.
+export const isSolidCap = product => /\bsolid\b/i.test(product.name || '');
+const sameColour = (a, b) => a.split(' ')[0].toLowerCase() === (b || '').toLowerCase();
 const MAX_TEXT = 20;
 
 let fontsLinked = false;

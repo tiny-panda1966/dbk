@@ -1,6 +1,6 @@
 // Shared chrome: header, mega menu, cart drawer, footer, toast.
 import { CONFIG } from './config.js';
-import { listProducts, listCategories, getCart, setQty, checkout, getMode, getMember, IMG, money, COLOURS, FEATURED, findFeatured } from './wix.js';
+import { getSetting, listProducts, listCategories, getCart, setQty, checkout, getMode, getMember, IMG, money, COLOURS, FEATURED, findFeatured } from './wix.js';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const productUrl = p => `product.html?slug=${encodeURIComponent(p.slug)}`;
@@ -234,8 +234,9 @@ export async function mountChrome() {
     hdr.querySelectorAll('[data-nav-cats] a').forEach(a => a.addEventListener('mouseenter', () => mega.hidden = true));
     if (capCat) trig.href = `index.html?cat=${capCat.slug}#prints`;
   }).catch(() => {});
-  listProducts().then(items => {
-    const picks = FEATURED.map(f => findFeatured(items, f)).filter(Boolean);
+  Promise.all([listProducts(), getSetting('popularPrints').catch(() => null)]).then(([items, ids]) => {
+    const chosen = Array.isArray(ids) ? ids.map(id => items.find(p => p.id === id)).filter(Boolean) : [];
+    const picks = chosen.length ? chosen.slice(0, 4) : FEATURED.map(f => findFeatured(items, f)).filter(Boolean);
     (picks.length ? picks : items.slice(0, 4)).forEach(p => hdr.querySelector('[data-mega-picks]').insertAdjacentHTML('beforeend',
       `<a href="${productUrl(p)}"><span class="pick-img" style="background-image:url('${IMG(p.images[0], 300)}')"></span><span class="clamp2">${esc(p.name.replace(' Welding Cap', ''))}</span><span class="mono">${money(p.price)}</span></a>`));
   }).catch(() => {});

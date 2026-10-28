@@ -103,6 +103,8 @@ function normV3(p) {
     colour: colourOf(p.name), images: [...new Set(imgs)],
     cats: [...new Set([p.mainCategoryId, ...(p.allCategoriesInfo?.categories || []).map(x => x._id || x.id), ...(p.directCategoriesInfo?.categories || []).map(x => x._id || x.id)].filter(Boolean))],
     description: descLines(p.plainDescription || p.description),
+    // Wix "Additional info sections" (e.g. Care, Sizing, Returns)
+    info: (p.infoSections || []).map(s => ({ title: s.title || s.uniqueName || '', lines: descLines(s.plainDescription || s.description) })).filter(s => s.title && s.lines.length),
     modifiers: (p.modifiers || []).map(m => ({
       key: m.key || m._id, name: m.name, type: m.modifierRenderType, mandatory: !!m.mandatory,
       choices: (m.choicesSettings?.choices || []).map(ch => ({ key: ch.key || ch.choiceId, name: ch.name, hex: ch.colorCode, add: Number(ch.addedPrice || 0) })),
@@ -125,7 +127,7 @@ function fallbackModifiers(cat) {
       choices: parts.map(v => m.type === 'SWATCH_CHOICES' ? { key: v.split(':')[1], name: v.split(':')[1], hex: v.split(':')[0], add: 0 } : { key: v, name: v, add: 0 }) };
   });
 }
-const normFallback = (p, mods) => ({ cats: ['welding-caps'], id: p.s, slug: p.h, name: p.n, sku: p.s, price: p.p, colour: p.c || colourOf(p.n), images: p.m || [], description: [], modifiers: mods, variantId: null, live: false });
+const normFallback = (p, mods) => ({ cats: ['welding-caps'], id: p.s, slug: p.h, name: p.n, sku: p.s, price: p.p, colour: p.c || colourOf(p.n), images: p.m || [], description: [], info: [], modifiers: mods, variantId: null, live: false });
 
 // ---------- catalogue ----------
 const hiddenIds = () => new Set([...(CONFIG.hiddenProductIds || []), CONFIG.embroidery?.productId].filter(Boolean));
@@ -196,7 +198,9 @@ export async function getProduct(slug) {
   if (c) {
     try {
       let res;
-      try { res = await c.productsV3.getProductBySlug(slug, { fields: ['MEDIA_ITEMS_INFO', 'PLAIN_DESCRIPTION', 'CURRENCY', 'VARIANT_OPTION_CHOICE_NAMES'] }); }
+      try { res = await c.productsV3.getProductBySlug(slug, { fields: ['MEDIA_ITEMS_INFO', 'PLAIN_DESCRIPTION', 'CURRENCY', 'VARIANT_OPTION_CHOICE_NAMES', 'INFO_SECTION', 'INFO_SECTION_PLAIN_DESCRIPTION'] }); }
+      catch (e) { res = null; }
+      if (!res) try { res = await c.productsV3.getProductBySlug(slug, { fields: ['MEDIA_ITEMS_INFO', 'PLAIN_DESCRIPTION', 'CURRENCY', 'VARIANT_OPTION_CHOICE_NAMES'] }); }
       catch (e) { res = await c.productsV3.getProductBySlug(slug, { fields: ['MEDIA_ITEMS_INFO', 'PLAIN_DESCRIPTION', 'CURRENCY'] }); }
       const raw = res.product || res;
       const p = normV3(raw); p._raw = raw;
@@ -325,6 +329,18 @@ export async function getFaqs() {
   }
   if (!rows.length) { try { rows = await fetch('data/faqs.json').then(r => r.json()); } catch (e) {} }
   return rows.filter(r => r.question).map(r => ({ category: r.category || 'General Questions', question: r.question, answer: r.answer || '' }));
+}
+
+// ---------- admin settings (Wix CMS, e.g. popular prints in the mega menu) ----------
+export async function getSetting(key) {
+  const c = await getClient(), col = CONFIG.settingsCollection || 'siteSettings';
+  if (!c?.items) return null;
+  try {
+    const q = c.items.query ? c.items.query(col) : c.items.queryDataItems({ dataCollectionId: col });
+    const res = await q.eq('key', key).limit(1).find(); saveTokens(c);
+    const v = (res.items?.[0]?.data || res.items?.[0])?.value;
+    return v ? JSON.parse(v) : null;
+  } catch (e) { console.warn('[DBK] Setting read failed:', e?.message || e); return null; }
 }
 
 // ---------- categories ----------

@@ -116,3 +116,13 @@ No other code changes are needed; everything account-specific is in `js/config.j
 ## Before launch
 - Remove `<meta name="robots" content="noindex">` from the pages and the `robots.txt` / `_headers` blocks.
 - Point the domain at Cloudflare Pages and add it to the Wix OAuth app's allowed domains.
+
+
+## Popular prints (mega menu)
+Admin → **Popular prints** picks the four welding caps shown under "Popular prints" in the Welding caps menu. Saved to the Wix CMS collection **`siteSettings`** (Text fields `key`, `value`; permission **Read: Anyone**), item key `popularPrints`. If nothing is saved, the built-in featured caps are shown. Optional Cloudflare variable `WIX_SETTINGS_COLLECTION` to rename the collection.
+
+## Product info sections
+Each product's Wix Stores **Additional info sections** are shown on its product page as expandable sections. The DBK returns summary is added only when the product has no info section about returns, refunds or exchanges.
+
+## Stitch colours
+Caps with **"Solid"** in the name show a Stitch colour picker using `stitchColours` in `js/config.js` (names must match the embroidery thread colours). The cap's own colour is left out. The chosen colour is added to the cap's order notes.

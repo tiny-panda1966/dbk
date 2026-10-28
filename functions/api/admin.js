@@ -66,6 +66,23 @@ async function listRules(env) {
   }));
 }
 
+// Site settings (Wix CMS collection, default "siteSettings": key + value Text fields). value holds JSON.
+const SETTINGS = env => env.WIX_SETTINGS_COLLECTION || 'siteSettings';
+async function findSetting(env, key) {
+  const j = await wix(env, '/wix-data/v2/items/query', { dataCollectionId: SETTINGS(env), query: { filter: { key: { $eq: key } }, paging: { limit: 1 } } });
+  return (j.dataItems || [])[0] || null;
+}
+async function getSettingValue(env, key) {
+  const it = await findSetting(env, key);
+  try { return it?.data?.value ? JSON.parse(it.data.value) : null; } catch (e) { return null; }
+}
+async function saveSetting(env, key, value) {
+  const it = await findSetting(env, key), data = { key, value: JSON.stringify(value) };
+  if (it) await wix(env, `/wix-data/v2/items/${it.id || it._id}`, { dataCollectionId: SETTINGS(env), dataItem: { id: it.id || it._id, data } }, 'PUT');
+  else await wix(env, '/wix-data/v2/items', { dataCollectionId: SETTINGS(env), dataItem: { data } });
+  return value;
+}
+
 async function listInstructions(env) {
   const out = []; let offset = 0;
   for (;;) {
@@ -95,6 +112,10 @@ export async function onRequest({ request, env }) {
   try {
     if (action === 'whoami') return json({ admin: true, email: a.email });
     if (action === 'rules') return json({ rules: await listRules(env), match: RULE_MATCH(env) });
+    if (action === 'popular') {
+      if (request.method === 'POST') { const ids = ((await request.json()).ids || []).filter(x => typeof x === 'string' && x).slice(0, 4); return json({ ids: await saveSetting(env, 'popularPrints', ids) }); }
+      return json({ ids: (await getSettingValue(env, 'popularPrints')) || [] });
+    }
     if (action === 'instructions') {
       if (request.method === 'POST') return json(await confirmInstructions(env, await request.json()));
       return json({ items: await listInstructions(env) });

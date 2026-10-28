@@ -24,6 +24,10 @@ export const CONFIG = {
   faqCollection: 'faqs',
   // Categories shown on the site, in this order. Matched to Wix Stores category names (case/plural-insensitive).
   categories: ['Welding Caps', 'Fabric', 'Custom Items', 'Embroidery Designs', 'Beanies', 'Accessories', 'Skull Caps', 'PDF Patterns'],
+  // Stitch colours offered on caps with "Solid" in the name – names must match the embroidery thread colours
+  stitchColours: ['Black', 'Black (Charcoal)', 'Blue', 'Brown', 'Cream', 'Gray', 'Green', 'Green (Lime)', 'Orange', 'Pink', 'Purple', 'Red', 'White', 'Yellow'],
+  // Wix CMS collection for admin settings (fields: key, value – Text; permission Read: Anyone). Holds "popularPrints".
+  settingsCollection: 'siteSettings',
   // Products in this category get the 3D builder + embroidery
   builderCategory: 'Welding Caps',
   // Never listed, searched or linked on the site (still usable in the cart). The embroidery product is added automatically.
