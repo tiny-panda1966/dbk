@@ -1,5 +1,9 @@
 let THREE;
-const HALF = Math.PI / 2, FLAP = { maxA: 92 * Math.PI / 180, len: 0.56, flare: 16 * Math.PI / 180, r0: 1.01 }, CROWN_Y = 1.1;
+// Proportions from DBK's dimension diagram (side view, total height ≈ cap diameter):
+// crown dome ≈ 45%, band ≈ 20%, ear/neck flap drop ≈ 35%. Flap wraps the back and ends just in front of the ear (~76° each side).
+const HALF = Math.PI / 2, FLAP = { maxA: 76 * Math.PI / 180, len: 0.72, flare: 0, curve: -0.045, r0: 1.01 }, CROWN_Y = 0.9, BAND_H = 0.42;
+// Flap length across its width: full drop over the neck, rounding up into the band in front of the ear.
+const flapProfile = u => Math.pow(Math.max(0, 1 - Math.pow(Math.abs(u), 3)), 0.6);
 // Front = peak side opposite the hanging flap (flap covers the neck at the back).
 const VIEWS = { front: [Math.PI, 0.2], right: [Math.PI / 2, 0.15], back: [0, 0.2], left: [-Math.PI / 2, 0.15], top: [Math.PI, 1.15] };
 
@@ -45,15 +49,15 @@ function shadowTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-// Welding-cap flap: short soft bill that hangs DOWN at the back/sides, flaring slightly out (covers ears + neck).
+// Welding-cap flap: hangs straight DOWN at the back/sides and curves slightly in towards the neck at the hem.
 function flapGeometry(r0, y0) {
   const segA = 72, segL = 12, maxA = FLAP.maxA, len = FLAP.len, flare = FLAP.flare, pos = [], uv = [], idx = [];
   for (let i = 0; i <= segA; i++) {
     const u = -1 + (2 * i) / segA, a = Math.PI + u * maxA;
-    const L = len * Math.sqrt(Math.max(0, 1 - Math.pow(Math.abs(u), 5))) + 0.001;
+    const L = len * flapProfile(u) + 0.001;
     for (let j = 0; j <= segL; j++) {
       const t = j / segL, d = L * t;
-      const r = r0 + d * Math.sin(flare) + 0.05 * Math.pow(t, 2) * (L / len);
+      const r = r0 + d * Math.sin(flare) + FLAP.curve * Math.pow(t, 2) * (L / len);
       pos.push(Math.sin(a) * r, y0 - d * Math.cos(flare), Math.cos(a) * r);
       uv.push(i / segA, t);
     }
@@ -108,18 +112,19 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.slice(1)), crownStitch); l.computeLineDistances(); crown.add(l);
   }
 
-  const bandH = 0.36;
+  const bandH = BAND_H;
   const bandGeo = new THREE.CylinderGeometry(1.0, 1.01, bandH, 96, 1, true);
   const band = new THREE.Mesh(bandGeo, bandMat); band.position.y = -bandH / 2; cap.add(band);
   const bandIn = new THREE.Mesh(bandGeo, liner); bandIn.position.y = -bandH / 2; cap.add(bandIn);
   const ring = (r, y) => { const pts = []; for (let k = 0; k <= 128; k++) { const a = (k / 128) * Math.PI * 2; pts.push(new THREE.Vector3(Math.sin(a) * r, y, Math.cos(a) * r)); } const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), stitchMat); l.computeLineDistances(); cap.add(l); };
   ring(1.006, -0.03); ring(1.014, -bandH + 0.03);
 
-  const flap = flapGeometry(1.01, 0);
+  const flap = flapGeometry(FLAP.r0, 0);
   const flapG = new THREE.Group(); flapG.position.y = -bandH; cap.add(flapG);
   const flapOut = new THREE.Mesh(flap.g, new THREE.MeshStandardMaterial({ color: 0xf6f6f4, map: weave, roughness: 0.92, side: THREE.FrontSide })); flapG.add(flapOut);
   const flapIn = new THREE.Mesh(flap.g, new THREE.MeshStandardMaterial({ color: 0x1f1f20, roughness: 0.95, side: THREE.BackSide })); flapG.add(flapIn);
   const flapLine = (j, off) => {
+
     const pts = [];
     for (let i = 2; i <= flap.segA - 2; i++) { const o = flap.id(i, j) * 3; const x = flap.pos[o], y = flap.pos[o + 1], z = flap.pos[o + 2], k = 1 + off / Math.hypot(x, z); pts.push(new THREE.Vector3(x * k, y, z * k)); }
     const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), stitchMat); l.computeLineDistances(); flapG.add(l);
@@ -128,7 +133,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
   const edge = []; for (let i = 0; i <= flap.segA; i++) { const o = flap.id(i, flap.segL) * 3; edge.push(new THREE.Vector3(flap.pos[o], flap.pos[o + 1], flap.pos[o + 2])); }
   flapG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(edge), seamMat));
   const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.2), new THREE.MeshStandardMaterial({ color: 0xdedede, roughness: 0.8 }));
-  const ta = Math.PI - 1.35; tag.position.set(Math.sin(ta) * 1.02, -bandH - 0.12, Math.cos(ta) * 1.02); tag.rotation.y = ta; cap.add(tag);
+  const ta = Math.PI - 0.95; tag.position.set(Math.sin(ta) * 1.02, -bandH - 0.12, Math.cos(ta) * 1.02); tag.rotation.y = ta; cap.add(tag);
 
   // embroidery patch
   const embCanvas = document.createElement('canvas'); embCanvas.width = embCanvas.height = 1024;
@@ -144,14 +149,19 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
   let patReq = 0;
   let flapK = 1;
   let place = { phi: Math.PI * 1.5, s: 1.02 }, emb = null, locked = false, hover = false, dragging = null;
-  let yaw = VIEWS.front[0], pitch = VIEWS.front[1], tYaw = yaw, tPitch = pitch;
+  // Intro: open on the side elevation (flap visible), tilted slightly down, then turn to the front after 2s.
+  // Any drag or view change before then cancels the turn.
+  const INTRO = { yaw: VIEWS.right[0], pitch: 0.32, delay: 2000, front: [VIEWS.front[0], 0.28] };
+  let yaw = INTRO.yaw, pitch = INTRO.pitch, tYaw = yaw, tPitch = pitch, ease = 0.14;
+  let introT = setTimeout(() => { introT = null; ease = 0.045; tYaw = INTRO.front[0]; tPitch = INTRO.front[1]; onView && onView('front'); setTimeout(() => { ease = 0.14; }, 1600); }, INTRO.delay);
+  const cancelIntro = () => { if (introT) { clearTimeout(introT); introT = null; } ease = 0.14; };
 
   function sizeAngle() { return 0.62 * ((emb && emb.scale) || 1); }
   // Whole-cap surface param: phi around the head, s = distance down from the button (crown → band → flap).
   function flapL(phi) {
     let a = Math.atan2(-Math.cos(phi), Math.sin(phi)); if (a < 0) a += 2 * Math.PI;
     const u = (a - Math.PI) / FLAP.maxA; if (Math.abs(u) >= 1) return 0;
-    return FLAP.len * Math.sqrt(Math.max(0, 1 - Math.pow(Math.abs(u), 5)));
+    return FLAP.len * flapProfile(u);
   }
   const sMax = phi => HALF + bandH + flapL(phi) * flapK - 0.01;
   function surf(phi, s, off) {
@@ -159,7 +169,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     if (s <= HALF) { const st = Math.sin(s) * (1 + off); return new THREE.Vector3(cx * st, Math.cos(s) * (1 + off) * CROWN_Y, cz * st); }
     if (s <= HALF + bandH) { const d = s - HALF, r = 1.0 + 0.01 * (d / bandH) + off; return new THREE.Vector3(cx * r, -d, cz * r); }
     const L = flapL(phi); let dd = Math.min((s - HALF - bandH) / flapK, L); const t = L ? dd / L : 0;
-    const r = FLAP.r0 + dd * Math.sin(FLAP.flare) + 0.05 * t * t * (L / FLAP.len) + off;
+    const r = FLAP.r0 + dd * Math.sin(FLAP.flare) + FLAP.curve * t * t * (L / FLAP.len) + off;
     return new THREE.Vector3(cx * r, -bandH - dd * Math.cos(FLAP.flare) * flapK, cz * r);
   }
   function invert(p) {
@@ -266,6 +276,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
   function emitPlace() { onPlace && onPlace(describe()); }
   let down = null;
   cv.addEventListener('pointerdown', ev => {
+    cancelIntro();
     cv.setPointerCapture(ev.pointerId);
     const onPatch = emb && !locked && hit(ev, [patch]);
     down = { x: ev.clientX, y: ev.clientY, yaw: tYaw, pitch: tPitch, moved: false };
@@ -321,7 +332,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
 
   let raf, alive = true, lastFrame = 0;
   function frame() {
-    yaw += (tYaw - yaw) * 0.14; pitch += (tPitch - pitch) * 0.14;
+    yaw += (tYaw - yaw) * ease; pitch += (tPitch - pitch) * ease;
     cap.rotation.set(pitch, yaw, 0, 'XYZ'); cap.position.y = 0.12;
     renderer.render(scene, camera); lastFrame = performance.now();
   }
@@ -351,7 +362,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     },
     async setEmbroidery(cfg) { emb = cfg; rebuildPatch(); await drawEmb(); },
     setView(k) {
-      const v = VIEWS[k]; if (!v) return;
+      const v = VIEWS[k]; if (!v) return; cancelIntro();
       const cur = tYaw, target = v[0];
       tYaw = cur + ((((target - cur) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI); tPitch = v[1];
     },
@@ -361,7 +372,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     },
     setLocked(v) { locked = v; rebuildPatch(); },
     setPlace(p) {
-      if (!p) return; place = clampPlace({ phi: p.phi, s: p.s }); rebuildPatch(); emitPlace();
+      if (!p) return; cancelIntro(); place = clampPlace({ phi: p.phi, s: p.s }); rebuildPatch(); emitPlace();
       const target = Math.atan2(Math.cos(place.phi), Math.sin(place.phi));
       tYaw = tYaw + ((((target - tYaw) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI);
       tPitch = place.s > HALF ? 0.05 : 0.3; onView && onView(nearestView());
@@ -369,6 +380,6 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     resize,
     describe,
     capture() { renderer.render(scene, camera); return cv.toDataURL('image/png'); },
-    destroy() { window.removeEventListener('resize', resize); alive = false; cancelAnimationFrame(raf); clearInterval(fallback); ro.disconnect(); renderer.dispose(); cv.remove(); },
+    destroy() { cancelIntro(); window.removeEventListener('resize', resize); alive = false; cancelAnimationFrame(raf); clearInterval(fallback); ro.disconnect(); renderer.dispose(); cv.remove(); },
   };
 }
