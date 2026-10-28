@@ -179,12 +179,41 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     return { phi, s: HALF + bandH + (-bandH - p.y) / Math.cos(FLAP.flare) };
   }
   function region(p) { return p.s < HALF ? 'Crown' : p.s < HALF + bandH ? 'Band' : 'Flap'; }
+  // Placement rules (DBK): on the flap, embroidery may cross the flap stitching. On the band it must sit between the
+  // top and bottom stitch rows. On the crown it must stay inside one of the 6 panels, clear of the panel seams and the
+  // crown/band seam. If the design is too big for its zone it is scaled down to fit (fitK < 1).
+  let ink = { x0: 0.08, x1: 0.92, y0: 0.38, y1: 0.62 }, fitK = 1;
+  const STITCH_M = 0.03, BAND_TOP = 0.03 + STITCH_M, BAND_BOT = 0.03 + STITCH_M, PANEL = Math.PI / 3;
+  function measureInk(mask) {
+    const d = mask.getContext('2d').getImageData(0, 0, 1024, 1024).data;
+    let x0 = 1024, x1 = -1, y0 = 1024, y1 = -1;
+    for (let y = 0; y < 1024; y += 4) for (let x = 0; x < 1024; x += 4) if (d[(y * 1024 + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) return;
+    ink = { x0: Math.max(0, x0 - 6) / 1024, x1: Math.min(1024, x1 + 10) / 1024, y0: Math.max(0, y0 - 6) / 1024, y1: Math.min(1024, y1 + 10) / 1024 };
+  }
+  const clamp = (v, lo, hi) => lo > hi ? (lo + hi) / 2 : Math.min(Math.max(v, lo), hi);
   function clampPlace(p) {
-    const W = sizeAngle();
-    return { phi: p.phi, s: Math.min(Math.max(p.s, W / 2 + 0.02), Math.max(W / 2 + 0.02, sMax(p.phi) - W / 2)) };
+    const W0 = sizeAngle(), hF = ink.y1 - ink.y0, wF = ink.x1 - ink.x0;
+    let phi = p.phi, s = p.s, k = 1;
+    const cs = s + W0 * ((ink.y0 + ink.y1) / 2 - 0.5);
+    const zone = cs < HALF ? 'crown' : cs < HALF + bandH ? 'band' : 'flap';
+    const lo = zone === 'crown' ? 0.07 : zone === 'band' ? HALF + BAND_TOP : HALF + bandH + 0.01;
+    const hi = zone === 'crown' ? HALF - STITCH_M : zone === 'band' ? HALF + bandH - BAND_BOT : sMax(phi);
+    if (zone !== 'flap' && W0 * hF > hi - lo) k = (hi - lo) / (W0 * hF);
+    let W = W0 * k;
+    s = clamp(s, lo + W * (0.5 - ink.y0), hi - W * (ink.y1 - 0.5));
+    if (zone === 'crown') {
+      const rc = Math.max(Math.sin(s), 0.35), mA = STITCH_M / rc, avail = PANEL - 2 * mA, wA = W * wF / rc;
+      if (wA > avail) { k *= avail / wA; W = W0 * k; s = clamp(s, lo + W * (0.5 - ink.y0), hi - W * (ink.y1 - 0.5)); }
+      const span = W / Math.max(Math.sin(s), 0.35);
+      const rel = (((phi - Math.PI / 6) % PANEL) + PANEL) % PANEL, pLo = phi - rel;
+      phi = clamp(phi, pLo + mA + span * (0.5 - ink.x0), pLo + PANEL - mA - span * (ink.x1 - 0.5));
+    }
+    fitK = k;
+    return { phi, s };
   }
   function rebuildPatch() {
-    const W = sizeAngle(); place = clampPlace(place);
+    place = clampPlace(place); const W = sizeAngle() * fitK;
     const rc = place.s < HALF ? Math.max(Math.sin(place.s), 0.35) : 1.03, span = W / rc, n = 36;
     const P = (i, j, off) => { const ph = place.phi - span / 2 + (span * i) / n; return surf(ph, Math.min(place.s - W / 2 + (W * j) / n, sMax(ph)), off); };
     const pos = [], uv = [], idx = [];
@@ -193,16 +222,17 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
     patch.geometry.dispose(); patch.geometry = g;
-    const pts = [];
-    for (let i = 0; i <= n; i++) pts.push(P(i, 0, 0.013));
-    for (let j = 0; j <= n; j++) pts.push(P(n, j, 0.013));
-    for (let i = n; i >= 0; i--) pts.push(P(i, n, 0.013));
-    for (let j = n; j >= 0; j--) pts.push(P(0, j, 0.013));
+    // Dashed guide hugs the actual text/image (not the full square patch), so it shows exactly what must clear the stitching.
+    const pts = [], i0 = ink.x0 * n, i1 = ink.x1 * n, j0 = ink.y0 * n, j1 = ink.y1 * n, q = 24;
+    for (let k = 0; k <= q; k++) pts.push(P(i0 + (i1 - i0) * k / q, j0, 0.013));
+    for (let k = 0; k <= q; k++) pts.push(P(i1, j0 + (j1 - j0) * k / q, 0.013));
+    for (let k = q; k >= 0; k--) pts.push(P(i0 + (i1 - i0) * k / q, j1, 0.013));
+    for (let k = q; k >= 0; k--) pts.push(P(i0, j0 + (j1 - j0) * k / q, 0.013));
     outline.geometry.dispose(); outline.geometry = new THREE.BufferGeometry().setFromPoints(pts); outline.computeLineDistances();
     patch.visible = !!emb; outline.visible = !!emb && !locked && (hover || !!dragging);
   }
 
-  // Satin-stitch embroidery: thread-direction fill, raised shading, contrasting merrow border so it reads on busy prints.
+  // Satin-stitch embroidery: thread-direction fill with raised shading.
   function stitchFill(th, angle, pitch) {
     const c = document.createElement('canvas'); c.width = c.height = 1024; const x = c.getContext('2d');
     x.fillStyle = th.d; x.fillRect(0, 0, 1024, 1024);
@@ -219,7 +249,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
   async function drawEmb() {
     const x = embCanvas.getContext('2d'); x.clearRect(0, 0, 1024, 1024);
     if (!emb) { embTex.needsUpdate = true; return; }
-    const th = emb.thread, border = lum(th.c) > 0.45 ? '#141415' : '#f7f6f2';
+    const th = emb.thread;
     const mask = document.createElement('canvas'); mask.width = mask.height = 1024; const m = mask.getContext('2d');
     m.translate(512, 512); m.rotate(((emb.rot || 0) * Math.PI) / 180);
     let bw = 18;
@@ -238,6 +268,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
       m.drawImage(img, -w / 2, -h / 2, w, h);
     } else { embTex.needsUpdate = true; return; }
     m.setTransform(1, 0, 0, 1, 0, 0);
+    measureInk(mask);
     const fill = document.createElement('canvas'); fill.width = fill.height = 1024; const fx = fill.getContext('2d');
     if (emb.mode === 'text') {
       fx.drawImage(stitchFill(th, -0.6, 7), 0, 0);
@@ -252,16 +283,10 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
       cx.fillStyle = col; cx.fillRect(0, 0, 1024, 1024); cx.globalCompositeOperation = 'destination-out'; cx.drawImage(mask, dx, dy);
       cx.globalCompositeOperation = 'destination-in'; cx.drawImage(mask, 0, 0); fx.globalAlpha = a; fx.drawImage(c, 0, 0); fx.globalAlpha = 1; };
     edge(-4, -4, '#000', 0.45); edge(4, 4, '#fff', 0.35);
-    // border ring (merrow / outline stitch) built by dilating the mask
-    const ring = document.createElement('canvas'); ring.width = ring.height = 1024; const rx = ring.getContext('2d');
-    for (let a = 0; a < 24; a++) { const t = (a / 24) * Math.PI * 2; rx.drawImage(mask, Math.cos(t) * bw, Math.sin(t) * bw); rx.drawImage(mask, Math.cos(t) * bw * 0.5, Math.sin(t) * bw * 0.5); }
-    rx.globalCompositeOperation = 'source-in'; rx.fillStyle = border; rx.fillRect(0, 0, 1024, 1024);
-    rx.globalCompositeOperation = 'source-atop'; rx.globalAlpha = 0.35;
-    rx.drawImage(stitchFill(border === '#141415' ? { c: '#2a2a2c', l: '#4a4a4e', d: '#000' } : { c: '#f7f6f2', l: '#ffffff', d: '#b9b6ae' }, 0.9, 5), 0, 0);
-    rx.globalAlpha = 1;
-    x.save(); x.shadowColor = 'rgba(0,0,0,.55)'; x.shadowBlur = 10; x.shadowOffsetY = 5; x.drawImage(ring, 0, 0); x.restore();
-    x.drawImage(fill, 0, 0);
+    // No outline border: just the raised stitched fill with a soft contact shadow.
+    x.save(); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 8; x.shadowOffsetY = 4; x.drawImage(fill, 0, 0); x.restore();
     embTex.needsUpdate = true;
+    rebuildPatch(); emitPlace();
   }
 
   // interaction
@@ -320,7 +345,8 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     const side = Math.abs(a) < 20 ? 'Front' : Math.abs(a) > 160 ? 'Back' : a > 0 ? 'Wearer’s left' : 'Wearer’s right';
     const up = Math.round(THREE.MathUtils.radToDeg(HALF - place.s));
     const detail = reg === 'Crown' ? `${up}° above band` : reg === 'Band' ? 'on the band' : `${Math.round((place.s - HALF - bandH) / (flapK * FLAP.len) * 100)}% down the flap`;
-    return { phi: place.phi, s: place.s, azimuth: Math.round(a), region: reg, side, text: `${side} · ${reg} · ${Math.abs(Math.round(a))}° from centre front · ${detail}` };
+    const fitted = fitK < 0.995;
+    return { phi: place.phi, s: place.s, azimuth: Math.round(a), region: reg, side, fitted, fit: Math.round(fitK * 100), text: `${side} · ${reg} · ${Math.abs(Math.round(a))}° from centre front · ${detail}${fitted ? ` · reduced to ${Math.round(fitK * 100)}% to fit between the stitching` : ''}` };
   }
 
   function resize() {
