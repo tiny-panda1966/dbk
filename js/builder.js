@@ -21,7 +21,14 @@ const FONT_DEFS = [
 ];
 export const FONTS = FONT_DEFS.map(([name, cat, weight]) => ({ name, cat, weight: weight || 400, family: `'${name}', ${cat === 'Script' ? 'cursive' : 'sans-serif'}` }));
 const CATS = ['All', 'Script', 'Varsity', 'Western', 'Block', 'Classic', 'Fun'];
-const SEAMS = [['Black', '#1d1d1f'], ['White', '#ffffff'], ['Yellow', '#f2c200'], ['Red', '#c62a22'], ['Blue', '#2753c8']];
+// Stitch thread colours offered on SOLID fabric caps (printed caps keep the standard stitch). The cap's own colour is left out.
+export const STITCHES = [['Black', '#1d1d1f'], ['White', '#ffffff'], ['Gray', '#8e8d8a'], ['Navy', '#1f2f5c'], ['Royal Blue', '#2753c8'], ['Light Blue', '#7fb3e6'], ['Red', '#c62a22'], ['Maroon', '#6e1f2a'], ['Orange', '#e8641c'], ['Yellow', '#f2c200'], ['Gold', '#c9a13b'], ['Kelly Green', '#1f8a3b'], ['Brown', '#6b4a2e'], ['Pink', '#e678a6']];
+// A cap counts as solid when its name is just a colour (e.g. "Black Welding Cap", "Solid Navy Welding Cap").
+export const isSolidCap = product => {
+  const n = (product.name || '').replace(/welding cap/i, '').replace(/\bsolid\b/i, '').trim().toLowerCase();
+  return /\bsolid\b/i.test(product.name || '') || (!!n && [...Object.keys(BASE), ...STITCHES.map(x => x[0])].some(c => c.toLowerCase() === n));
+};
+const sameColour = (a, b) => a.toLowerCase().split(' ').pop() === (b || '').toLowerCase().split(' ').pop();
 const MAX_TEXT = 20;
 
 let fontsLinked = false;
@@ -39,7 +46,9 @@ async function resize(dataUrl, max, type = 'image/png', q) {
 }
 
 export function createBuilder({ wrap, step, stepNo, product, threads, prices, onChange }) {
-  const st = { look: 'print', seam: 'Black', view: 'front', mode: 'none', text: '', font: 'Yellowtail', thread: threads.includes('Black') ? 'Black' : threads[0],
+  const solid = isSolidCap(product);
+  const stitchList = solid ? STITCHES.filter(([n]) => !sameColour(n, product.colour)) : [];
+  const st = { look: 'print', stitch: stitchList.some(x => x[0] === 'Black') ? 'Black' : (stitchList[0]?.[0] || 'Black'), view: 'front', mode: 'none', text: '', font: 'Yellowtail', thread: threads.includes('Black') ? 'Black' : threads[0],
     scale: 100, rot: 0, upload: null, uploadName: '', locked: false, capture: null, place: null, fontQuery: '', fontCat: 'All', printFailed: false };
   const opt = { fabric: BASE[product.colour] || '#8e8d8a', liner: '#1b1b1c', deep: false };
   let viewer = null, last = {};
@@ -47,7 +56,7 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
   wrap.innerHTML = `
     <div class="stage" data-stage><div class="stage-load">Loading 3D cap…</div></div>
     <div class="model-row">
-      <div class="seg"><span class="kicker">Seams</span><div class="seam-sw">${SEAMS.map(([n, h]) => `<button type="button" data-seam="${n}" title="${n}"><span style="background:${h}"></span></button>`).join('')}</div></div>
+      ${solid ? `<div class="seg seg-wrap"><span class="kicker">Stitch colour <span data-stitch-name></span></span><div class="seam-sw">${stitchList.map(([n, h]) => `<button type="button" data-stitch="${n}" title="${n}" aria-label="${n} stitching"><span style="background:${h}"></span></button>`).join('')}</div></div>` : ''}
     </div>
     <div class="place-row" data-place-row hidden>
       <div class="place-txt"><span class="kicker">Embroidery placement</span><strong data-place-text>—</strong></div>
@@ -76,6 +85,7 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
     </div>
     <div class="emb-panel" data-emb-upload hidden>
       <label class="upload"><input type="file" accept="image/png,image/jpeg,image/svg+xml" data-file><span data-file-name>Choose a logo or image (PNG, JPG or SVG)</span></label>
+      <p class="note copyright"><strong>Copyright reminder:</strong> only upload logos or images you own or have permission to use. DBK can’t stitch trademarked logos, team or brand artwork without the owner’s permission.</p>
       <p class="note">Kelly prepares your artwork for stitching and emails a proof before your cap is made.</p>
     </div>
     <div class="emb-panel" data-emb-common hidden>
@@ -104,7 +114,8 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
   const closeFonts = () => { S('[data-font-pop]').hidden = true; S('[data-font-btn]').setAttribute('aria-expanded', 'false'); };
 
   function sync() {
-    wrap.querySelectorAll('[data-seam]').forEach(b => b.classList.toggle('on', b.dataset.seam === st.seam));
+    wrap.querySelectorAll('[data-stitch]').forEach(b => b.classList.toggle('on', b.dataset.stitch === st.stitch));
+    const sn = W('[data-stitch-name]'); if (sn) sn.textContent = '· ' + st.stitch;
     W('[data-look-note]').textContent = st.look === 'print' ? (st.printFailed ? 'The print couldn’t be loaded, so the model shows the base colour.' : 'Print preview taken from the product photo. Kelly emails a stitch proof on your real fabric.') : st.look === 'colour' ? 'Showing the fabric’s base colour.' : 'Plain white cap, for placing embroidery clearly. Your liner colour shows inside.';
     const on = !!active();
     W('[data-place-row]').hidden = !on;
@@ -126,10 +137,10 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
 
   function syncViewer() {
     if (!viewer) return;
-    const lk = [st.look, st.seam, opt.fabric].join('|');
+    const lk = [st.look, st.stitch, opt.fabric].join('|');
     if (lk !== last.look) {
       last.look = lk;
-      viewer.setAppearance({ mode: st.look, fabric: opt.fabric, pattern: product.images[0] ? `https://static.wixstatic.com/media/${product.images[0]}/v1/fill/w_900,h_900,al_c,q_85/${product.images[0]}` : null, seam: SEAMS.find(s => s[0] === st.seam)[1] })
+      viewer.setAppearance({ mode: st.look, fabric: opt.fabric, pattern: product.images[0] ? `https://static.wixstatic.com/media/${product.images[0]}/v1/fill/w_900,h_900,al_c,q_85/${product.images[0]}` : null, seam: (solid ? (STITCHES.find(x => x[0] === st.stitch) || STITCHES[0])[1] : '#1d1d1f') })
         .then(ok => { const f = st.look === 'print' && !ok; if (f !== st.printFailed) { st.printFailed = f; sync(); } });
     }
     if (opt.liner !== last.liner) { last.liner = opt.liner; viewer.setColors({ fabric: opt.fabric, liner: opt.liner }); }
@@ -142,7 +153,7 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
   }
 
   const unlock = () => { st.locked = false; st.capture = null; };
-  wrap.querySelectorAll('[data-seam]').forEach(b => b.onclick = () => { st.seam = b.dataset.seam; sync(); });
+  wrap.querySelectorAll('[data-stitch]').forEach(b => b.onclick = () => { st.stitch = b.dataset.stitch; sync(); });
   W('[data-face]').onclick = () => { if (!st.locked && viewer) viewer.faceCamera(); };
   W('[data-lock]').onclick = () => {
     if (!viewer) return;
@@ -180,6 +191,7 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
     setOptions({ liner, deep }) { if (liner) opt.liner = liner; opt.deep = !!deep; syncViewer(); },
     active: () => !!active(),
     prefs: () => ({ font: st.font, thread: st.thread }),
+    stitch: () => solid ? st.stitch : '',
     applyPrefs({ font, thread } = {}) {
       if (font && FONTS.some(f => f.name === font)) st.font = font;
       if (thread && threads.includes(thread)) st.thread = thread;

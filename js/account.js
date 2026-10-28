@@ -19,7 +19,7 @@ if (!member) {
       <h1 class="display">Order it once.<br>Reorder in a click.</h1>
       <ul class="benefits">
         <li>Save your size, liner, bill and embroidery preferences once</li>
-        <li>Every new cap fills them in for you</li>
+        <li>Every new order is pre-filled with your preferences</li>
         <li>Special instructions confirmed by Kelly and applied to every order</li>
         <li>Reorder a past cap in one click, plus members-only surplus caps</li>
       </ul>

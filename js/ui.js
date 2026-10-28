@@ -58,7 +58,7 @@ function headerHtml() {
       <div class="mega-inner">
         <div class="mega-col">
           <span class="kicker">Shop by colour</span>
-          <div class="mega-colours">${Object.entries(COLOURS).slice(0, 12).map(([k, h]) => `<a href="index.html?cat=welding-caps&colour=${k}#prints" data-cap-link data-colour="${k}"><span class="dot" style="background:${h}"></span>${k}</a>`).join('')}</div>
+          <div class="mega-colours">${Object.entries(COLOURS).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 12).map(([k, h]) => `<a href="index.html?cat=welding-caps&colour=${k}#prints" data-cap-link data-colour="${k}"><span class="dot" style="background:${h}"></span>${k}</a>`).join('')}</div>
           <a href="index.html?cat=welding-caps#prints" class="mega-all" data-cap-link>All welding caps</a>
         </div>
         <div class="mega-col wide">
@@ -95,6 +95,15 @@ function footerHtml() {
     </nav>
     <div class="foot-meta"><a href="mailto:${esc(email)}">${esc(email)}</a><span>Phone / text: ${esc(phone)}</span><span>© ${new Date().getFullYear()} DBK – Welding Caps</span></div>
   </footer>`;
+}
+// Product page info section (personalised items). Full policy stays in the Shipping & Returns pop-up.
+export function policyInfoHtml() {
+  return `<details class="pdp-more"><summary>Returns, refunds &amp; exchanges</summary>
+    <div class="pdp-more-body">
+      <p><strong>Personalised items</strong> (custom sizing, name or logo embroidery) are made to order for you. Please check your sizes, spelling and placement before you check out.</p>
+      <p>If you’re not completely satisfied, contact Kelly and we’ll send a free return shipping label by email. Returned items are inspected before a refund is confirmed. Refunds go back to the original payment method and may take 7–10 days; store credit is available within 1–2 days of receiving the return.</p>
+      <p><button type="button" class="link-btn" data-open-policy>Read the full Shipping &amp; Returns policy</button></p>
+    </div></details>`;
 }
 function policyHtml() {
   return `<div class="drawer-scrim" data-close-policy hidden></div>
@@ -179,7 +188,8 @@ export async function mountChrome() {
   document.querySelector('[data-header]').innerHTML = headerHtml();
   document.querySelector('[data-footer]').innerHTML = footerHtml();
   document.body.insertAdjacentHTML('beforeend', drawerHtml() + searchHtml() + policyHtml());
-  document.querySelectorAll('[data-open-policy]').forEach(b => b.onclick = openPolicy);
+  // delegated so policy links added later (e.g. product page info section) also work
+  document.addEventListener('click', e => { if (e.target.closest('[data-open-policy]')) { e.preventDefault(); openPolicy(); } });
   document.querySelectorAll('[data-close-policy]').forEach(b => b.onclick = closePolicy);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closePolicy(); });
   if (location.hash === '#shipping-returns') openPolicy();

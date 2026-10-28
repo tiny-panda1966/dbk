@@ -23,7 +23,7 @@ export const CONFIG = {
   // Wix CMS collection for FAQs (fields: category, question, answer, sortOrder; Read permission: Anyone)
   faqCollection: 'faqs',
   // Categories shown on the site, in this order. Matched to Wix Stores category names (case/plural-insensitive).
-  categories: ['Welding Caps', 'Fabric', 'Custom Items', 'Embroidery Designs', 'Beanies', 'Accessories', 'Skull Caps'],
+  categories: ['Welding Caps', 'Fabric', 'Custom Items', 'Embroidery Designs', 'Beanies', 'Accessories', 'Skull Caps', 'PDF Patterns'],
   // Products in this category get the 3D builder + embroidery
   builderCategory: 'Welding Caps',
   // Never listed, searched or linked on the site (still usable in the cart). The embroidery product is added automatically.

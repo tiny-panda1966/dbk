@@ -1,4 +1,4 @@
-import { mountChrome, esc, toast, openCart, busy } from './ui.js';
+import { policyInfoHtml, mountChrome, esc, toast, openCart, busy } from './ui.js';
 import { getMember, getPrefs, savePrefs, getSurplus, login, isHidden, listCategories, builderCategoryId } from './wix.js';
 import { listProducts, getProduct, addToCart, linkLines, getEmbroideryProduct, getThreads, saveDesign, getMode, IMG, IMG_FIT, money, FEATURED, findFeatured } from './wix.js';
 import { createBuilder } from './builder.js';
@@ -60,6 +60,7 @@ root.innerHTML = `
         <h1 class="display">${esc(p.name)}</h1>
         <span class="price mono" data-price></span>
         ${p.description.length ? `<div class="pdp-desc">${p.description.map(t => `<p>${esc(t)}</p>`).join('')}</div>` : ''}
+        ${policyInfoHtml()}
       </div>
       <div data-member-box></div>
       ${choiceMods.map((m, i) => `
@@ -151,10 +152,12 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
       if (tm) capTexts[tm.key] = [`Embroidery ref: ${tag}`, capTexts[tm.key]].filter(Boolean).join('\n').slice(0, tm.text.max);
       if (!(embProduct?.[e.mode === 'upload' ? 'logo' : 'text']) && textMods[0]) { const k = textMods[0].key; capTexts[k] = [capTexts[k], 'EMBROIDERY – ' + spec].filter(Boolean).join('\n').slice(0, textMods[0].text.max); }
     }
+    const stitch = builder?.stitch?.() || '';
+    if (stitch) { const tm = tagMod(); if (tm) capTexts[tm.key] = [capTexts[tm.key], `Stitch colour: ${stitch}`].filter(Boolean).join('\n').slice(0, tm.text.max); }
     const instr = instrForOrder();
     if (instr) { const tm = tagMod(); if (tm) capTexts[tm.key] = [capTexts[tm.key], instr.line].filter(Boolean).join('\n').slice(0, tm.text.max); }
     if (instr?.changed) savePrefs({ instructions: instr.text }).then(x => { prefs = x; renderInstr(); }).catch(() => {});
-    const fit = [...(tag ? [`Embroidery ref: ${tag}`] : []), ...(instr ? [instr.line] : []), ...choiceMods.map(m => `${label(m)}: ${chosen(m)?.name || '—'}`), ...textMods.filter(m => state.text[m.key]?.trim()).map(m => `${m.name.replace(' (Please Specify)', '')}: ${state.text[m.key].trim()}`)];
+    const fit = [...(tag ? [`Embroidery ref: ${tag}`] : []), ...(instr ? [instr.line] : []), ...choiceMods.map(m => `${label(m)}: ${chosen(m)?.name || '—'}`), ...(stitch ? [`Stitch colour: ${stitch}`] : []), ...textMods.filter(m => state.text[m.key]?.trim()).map(m => `${m.name.replace(' (Please Specify)', '')}: ${state.text[m.key].trim()}`)];
     busy.step(`Adding ${p.name.replace(/ Welding Cap$/, '')} to your cart`);
     const capLine = await addToCart(p, { choices: state.sel, texts: capTexts, qty: state.qty, unit: unit() - embCost(), summary: fit });
     const choice = e && embProduct?.[e.mode === 'upload' ? 'logo' : 'text'];

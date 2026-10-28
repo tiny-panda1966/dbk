@@ -32,7 +32,7 @@ function render() {
   const co = catObj(), terms = words(q);
   let list = co ? all.filter(p => p.cats?.includes(co.id)) : all;
   if (terms.length) list = list.filter(p => matches(p, terms));
-  const colours = Object.keys(COLOURS).filter(c => list.some(p => p.colour === c));
+  const colours = Object.keys(COLOURS).filter(c => list.some(p => p.colour === c)).sort((a, b) => a.localeCompare(b));
   if (colour !== 'All' && !colours.includes(colour)) colour = 'All';
   const shownList = colour === 'All' ? list : list.filter(p => p.colour === colour);
 

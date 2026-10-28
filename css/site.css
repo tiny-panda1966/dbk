@@ -130,7 +130,16 @@ img{display:block;max-width:100%}
 .seg-btns{display:flex;border:1.5px solid var(--ink);border-radius:2px;overflow:hidden}
 .seg-btns button{min-height:40px;padding:0 14px;border:0;background:#fff;font-size:13px;font-weight:700;text-transform:uppercase;cursor:pointer}
 .seg-btns button.on{background:var(--ink);color:#fff}
-.seam-sw{display:flex;gap:6px}
+.seam-sw{display:flex;gap:6px;flex-wrap:wrap}
+.seg-wrap{flex-direction:column;align-items:flex-start;gap:8px}
+.note.copyright{background:#fffbe6;border-left:0;padding:10px 12px;border-radius:2px;color:var(--ink)}
+.pdp-more{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.pdp-more summary{cursor:pointer;min-height:48px;display:flex;align-items:center;font-weight:700;font-size:16px;list-style:none}
+.pdp-more summary::-webkit-details-marker{display:none}
+.pdp-more summary::after{content:'+';margin-left:auto;font-size:22px}
+.pdp-more[open] summary::after{content:'−'}
+.pdp-more-body{padding:0 0 14px;font-size:15px;line-height:1.55;color:var(--muted)}
+.pdp-more-body p{margin:0 0 10px}
 .seam-sw button,.threads button{width:40px;height:40px;padding:4px;border:1px solid #cfccc6;border-radius:50%;background:#fff;cursor:pointer;display:flex}
 .seam-sw button.on,.threads button.on{border:2px solid var(--ink)}
 .seam-sw span,.threads span{flex:1;border-radius:50%;box-shadow:inset 0 0 0 1px #0002}
