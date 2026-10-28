@@ -21,7 +21,6 @@ const FONT_DEFS = [
 ];
 export const FONTS = FONT_DEFS.map(([name, cat, weight]) => ({ name, cat, weight: weight || 400, family: `'${name}', ${cat === 'Script' ? 'cursive' : 'sans-serif'}` }));
 const CATS = ['All', 'Script', 'Varsity', 'Western', 'Block', 'Classic', 'Fun'];
-const VIEWS = [['front', 'Front'], ['right', 'Right'], ['back', 'Back'], ['left', 'Left'], ['top', 'Top']];
 const SEAMS = [['Black', '#1d1d1f'], ['White', '#ffffff'], ['Yellow', '#f2c200'], ['Red', '#c62a22'], ['Blue', '#2753c8']];
 const MAX_TEXT = 20;
 
@@ -47,7 +46,6 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
 
   wrap.innerHTML = `
     <div class="stage" data-stage><div class="stage-load">Loading 3D cap…</div></div>
-    <div class="views">${VIEWS.map(([k, l]) => `<button type="button" data-view="${k}">${l}</button>`).join('')}</div>
     <div class="model-row">
       <div class="seg"><span class="kicker">Seams</span><div class="seam-sw">${SEAMS.map(([n, h]) => `<button type="button" data-seam="${n}" title="${n}"><span style="background:${h}"></span></button>`).join('')}</div></div>
     </div>
@@ -106,7 +104,6 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
   const closeFonts = () => { S('[data-font-pop]').hidden = true; S('[data-font-btn]').setAttribute('aria-expanded', 'false'); };
 
   function sync() {
-    wrap.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === st.view));
     wrap.querySelectorAll('[data-seam]').forEach(b => b.classList.toggle('on', b.dataset.seam === st.seam));
     W('[data-look-note]').textContent = st.look === 'print' ? (st.printFailed ? 'The print couldn’t be loaded, so the model shows the base colour.' : 'Print preview taken from the product photo. Kelly emails a stitch proof on your real fabric.') : st.look === 'colour' ? 'Showing the fabric’s base colour.' : 'Plain white cap, for placing embroidery clearly. Your liner colour shows inside.';
     const on = !!active();
@@ -145,7 +142,6 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
   }
 
   const unlock = () => { st.locked = false; st.capture = null; };
-  wrap.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { st.view = b.dataset.view; viewer && viewer.setView(st.view); sync(); });
   wrap.querySelectorAll('[data-seam]').forEach(b => b.onclick = () => { st.seam = b.dataset.seam; sync(); });
   W('[data-face]').onclick = () => { if (!st.locked && viewer) viewer.faceCamera(); };
   W('[data-lock]').onclick = () => {
