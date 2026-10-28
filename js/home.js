@@ -52,7 +52,7 @@ function render() {
     <article class="card" data-reveal>
       <a href="${productUrl(p)}" class="card-img"><img loading="lazy" src="${IMG(p.images[0], 500)}" alt="${esc(p.name)}"></a>
       <div class="card-text"><a href="${productUrl(p)}" class="clamp2 card-name" title="${esc(p.name)}">${esc(p.name)}</a><span class="mono">${money(p.price)}</span></div>
-      <a href="${productUrl(p)}" class="btn btn-outline btn-block card-btn">${isCap ? 'Build this cap' : 'View'}</a>
+      <a href="${productUrl(p)}" class="btn btn-outline btn-block card-btn">${isCap ? 'Customize this cap' : 'View'}</a>
     </article>`;
   }).join('') : `<p class="empty">No products match${q ? ` “${esc(q)}”` : ''}. <button type="button" class="link-btn" data-reset>Clear search and filters</button></p>`;
   grid.querySelector('[data-reset]')?.addEventListener('click', () => { q = ''; searchEl.value = ''; cat = 'all'; colour = 'All'; pushUrl(); render(); });

@@ -50,7 +50,7 @@ function headerHtml() {
     </div>
     <nav class="main-nav">
       <a href="index.html#prints" data-mega-trigger>Welding caps <span aria-hidden="true">▾</span></a>
-      <a href="product.html">Build your cap</a>
+      <a href="product.html">Customize your cap</a>
       <span class="nav-cats" data-nav-cats></span>
     </nav>
     <div class="mega" hidden>
@@ -64,7 +64,7 @@ function headerHtml() {
         <div class="mega-col wide">
           <span class="kicker">Popular prints</span>
           <div class="mega-picks" data-mega-picks></div>
-          <a href="product.html" class="mega-build"><span><strong>Build your cap</strong><small>Size, liner, bill and options in one place</small></span><span aria-hidden="true">→</span></a>
+          <a href="product.html" class="mega-build"><span><strong>Customize your cap</strong><small>Size, liner, bill and options in one place</small></span><span aria-hidden="true">→</span></a>
         </div>
       </div>
     </div>
@@ -90,7 +90,7 @@ function footerHtml() {
     <div class="foot-brand"><img src="assets/dbk-logo.avif" alt="DBK Welding Caps" class="foot-logo"><p>Handmade welding caps by DBK – Welding Caps.</p>
       ${social.length ? `<div class="foot-social">${social.map(([k, url]) => `<a href="${esc(url)}" target="_blank" rel="noopener" aria-label="${k[0].toUpperCase() + k.slice(1)}">${ICONS[k] || k}</a>`).join('')}</div>` : ''}</div>
     <nav class="foot-links" aria-label="Footer">
-      <a href="index.html#prints">Shop</a><a href="product.html">Build your cap</a><a href="account.html">Members</a>
+      <a href="index.html#prints">Shop</a><a href="product.html">Customize your cap</a><a href="account.html">Members</a>
       <a href="faq.html">FAQs</a><a href="contact.html">Contact</a><button type="button" class="link-btn" data-open-policy>Shipping &amp; Returns</button>
     </nav>
     <div class="foot-meta"><a href="mailto:${esc(email)}">${esc(email)}</a><span>Phone / text: ${esc(phone)}</span><span>© ${new Date().getFullYear()} DBK – Welding Caps</span></div>
@@ -100,8 +100,7 @@ function footerHtml() {
 export function policyInfoHtml() {
   return `<details class="pdp-more"><summary>Returns, refunds &amp; exchanges</summary>
     <div class="pdp-more-body">
-      <p><strong>Personalised items</strong> (custom sizing, name or logo embroidery) are made to order for you. Please check your sizes, spelling and placement before you check out.</p>
-      <p>If you’re not completely satisfied, contact Kelly and we’ll send a free return shipping label by email. Returned items are inspected before a refund is confirmed. Refunds go back to the original payment method and may take 7–10 days; store credit is available within 1–2 days of receiving the return.</p>
+      <p><strong>Personalized items are final sale.</strong> Caps made to your size, or with name or logo embroidery, can’t be refunded, returned or exchanged. Please check your sizes, spelling and placement before you check out.</p>
       <p><button type="button" class="link-btn" data-open-policy>Read the full Shipping &amp; Returns policy</button></p>
     </div></details>`;
 }

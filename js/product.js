@@ -56,7 +56,7 @@ root.innerHTML = `
     </div>
     <div class="pdp-info">
       <div class="pdp-title">
-        <span class="kicker">${isCap ? 'Build your cap' : esc(myCat?.name || 'DBK Welding Caps')}</span>
+        <span class="kicker">${isCap ? 'Customize your cap' : esc(myCat?.name || 'DBK Welding Caps')}</span>
         <h1 class="display">${esc(p.name)}</h1>
         <span class="price mono" data-price></span>
         ${p.description.length ? `<div class="pdp-desc">${p.description.map(t => `<p>${esc(t)}</p>`).join('')}</div>` : ''}
