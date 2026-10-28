@@ -132,7 +132,19 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
   [0.3, 0.6, 0.88].forEach(t => flapLine(Math.round(t * flap.segL), 0.006));
   const edge = []; for (let i = 0; i <= flap.segA; i++) { const o = flap.id(i, flap.segL) * 3; edge.push(new THREE.Vector3(flap.pos[o], flap.pos[o + 1], flap.pos[o + 2])); }
   flapG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(edge), seamMat));
-  const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.2), new THREE.MeshStandardMaterial({ color: 0xdedede, roughness: 0.8 }));
+  // Woven DBK label: white tag with the logo drawn onto it (falls back to a plain tag if the logo can't load).
+  const tagC = document.createElement('canvas'); tagC.width = 512; tagC.height = 320;
+  const tagTex = new THREE.CanvasTexture(tagC); tagTex.colorSpace = THREE.SRGBColorSpace; tagTex.anisotropy = 8;
+  const drawTag = img => {
+    const x = tagC.getContext('2d'); x.fillStyle = '#fbfbf9'; x.fillRect(0, 0, 512, 320);
+    for (let i = 0; i < 320; i += 3) { x.fillStyle = 'rgba(0,0,0,.025)'; x.fillRect(0, i, 512, 1); }
+    x.strokeStyle = 'rgba(0,0,0,.18)'; x.setLineDash([10, 7]); x.lineWidth = 3; x.strokeRect(14, 14, 484, 292);
+    if (img) { const k = Math.min(440 / img.width, 250 / img.height), w = img.width * k, h = img.height * k; x.drawImage(img, (512 - w) / 2, (320 - h) / 2, w, h); }
+    tagTex.needsUpdate = true;
+  };
+  drawTag(null);
+  { const img = new Image(); img.onload = () => drawTag(img); img.src = new URL('../assets/dbk-logo.avif', import.meta.url).href; }
+  const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.163), new THREE.MeshStandardMaterial({ map: tagTex, roughness: 0.85, side: THREE.DoubleSide }));
   const ta = Math.PI - 0.95; tag.position.set(Math.sin(ta) * 1.02, -bandH - 0.12, Math.cos(ta) * 1.02); tag.rotation.y = ta; cap.add(tag);
 
   // embroidery patch
