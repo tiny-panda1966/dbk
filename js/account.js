@@ -20,7 +20,7 @@ if (!member) {
       <ul class="benefits">
         <li>Save your size, liner, bill and embroidery preferences once</li>
         <li>Every new order is pre-filled with your preferences</li>
-        <li>Special instructions confirmed by Kelly and applied to every order</li>
+        <li>Special instructions confirmed by DBK Admin Staff and applied to every order</li>
         <li>Reorder a past cap in one click, plus members-only surplus caps</li>
       </ul>
       <div class="hero-ctas"><button type="button" class="btn btn-yellow" data-login>Log in or join free</button></div>
@@ -91,7 +91,7 @@ if (!member) {
     const ta = iBox.querySelector('[data-it]'); ta.value = prefs.instructions || '';
     iBox.querySelector('[data-isave]').onclick = async e => {
       e.target.disabled = true;
-      try { prefs = await savePrefs({ instructions: ta.value }); toast('Instructions saved. Kelly will confirm them.'); renderInstr(); } catch (err) { toast('Couldn’t save.'); e.target.disabled = false; }
+      try { prefs = await savePrefs({ instructions: ta.value }); toast('Instructions saved. DBK Admin Staff will confirm them.'); renderInstr(); } catch (err) { toast('Couldn’t save.'); e.target.disabled = false; }
     };
   };
   renderInstr();

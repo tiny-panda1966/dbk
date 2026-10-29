@@ -145,7 +145,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
   drawTag(null);
   { const img = new Image(); img.onload = () => drawTag(img); img.src = new URL('../assets/dbk-logo.avif', import.meta.url).href; }
   const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.163), new THREE.MeshStandardMaterial({ map: tagTex, roughness: 0.85, side: THREE.DoubleSide }));
-  const ta = Math.PI - 0.95; tag.position.set(Math.sin(ta) * 1.02, -bandH - 0.12, Math.cos(ta) * 1.02); tag.rotation.y = ta; cap.add(tag);
+  const ta = Math.PI + 0.95; // DBK tag on the right side, where staff sew it tag.position.set(Math.sin(ta) * 1.02, -bandH - 0.12, Math.cos(ta) * 1.02); tag.rotation.y = ta; cap.add(tag);
 
   // embroidery patch
   const embCanvas = document.createElement('canvas'); embCanvas.width = embCanvas.height = 1024;

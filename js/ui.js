@@ -50,7 +50,6 @@ function headerHtml() {
     </div>
     <nav class="main-nav">
       <a href="index.html#prints" data-mega-trigger>Welding caps <span aria-hidden="true">▾</span></a>
-      <a href="product.html">Customize your cap</a>
       <span class="nav-cats" data-nav-cats></span>
     </nav>
     <div class="mega" hidden>
