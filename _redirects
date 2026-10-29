@@ -1,27 +1,25 @@
 # Old Wix site links → new site (301 = permanent, keeps search rankings)
-# Products: Wix product slugs are the same on the new store
-/product-page/:slug      /product.html?slug=:slug        301
+# Note: Cloudflare Pages already serves /contact, /faq, /account, /product etc. (no .html) – never redirect those to *.html (loops).
+/product-page/:slug      /product?slug=:slug                 301
 
 # Wix store / category pages
-/shop                    /index.html?cat=all#prints      301
-/shop/*                  /index.html?cat=all#prints      301
-/category/all-products   /index.html?cat=all#prints      301
-/category/:cat           /index.html?cat=:cat#prints     301
-/welding-caps            /index.html?cat=welding-caps#prints 301
-/custom-items            /index.html?cat=custom-items#prints 301
-/skull-caps              /index.html?q=skull&cat=all#prints  301
-/emb-designs             /index.html?q=embroidery&cat=all#prints 301
-/emb-beanies             /index.html?q=beanie&cat=all#prints 301
-/fabrics                 /index.html?q=fabric&cat=all#prints 301
-/pdf-patterns            /index.html?q=pattern&cat=all#prints 301
+/shop                    /?cat=all#prints                    301
+/shop/*                  /?cat=all#prints                    301
+/category/all-products   /?cat=all#prints                    301
+/category/:cat           /?cat=:cat#prints                   301
+/welding-caps            /?cat=welding-caps#prints           301
+/custom-items            /?cat=custom-items#prints           301
+/skull-caps              /?q=skull&cat=all#prints            301
+/emb-designs             /?q=embroidery&cat=all#prints       301
+/emb-beanies             /?q=beanie&cat=all#prints           301
+/fabrics                 /?q=fabric&cat=all#prints           301
+/pdf-patterns            /?q=pattern&cat=all#prints          301
 
-# Info pages
-/contact                 /contact.html                   301
-/shipping-returns        /index.html#shipping-returns    301
-/faq                     /faq.html                       301
-/faqs                    /faq.html                       301
-/cart-page               /index.html                     301
-/account/*               /account.html                   301
-/members-area/*          /account.html                   301
-/about                   /index.html                     301
-/home                    /index.html                     301
+# Info pages with different names on the old site
+/shipping-returns        /#shipping-returns                  301
+/faqs                    /faq                                301
+/cart-page               /                                   301
+/account/*               /account                            301
+/members-area/*          /account                            301
+/about                   /                                   301
+/home                    /                                   301
