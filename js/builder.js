@@ -139,7 +139,7 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
     const lk = [st.look, st.stitch, opt.fabric].join('|');
     if (lk !== last.look) {
       last.look = lk;
-      viewer.setAppearance({ mode: st.look, fabric: opt.fabric, pattern: product.images[0] ? `https://static.wixstatic.com/media/${product.images[0]}/v1/fill/w_900,h_900,al_c,q_85/${product.images[0]}` : null, seam: (solid ? (STITCHES.find(x => x[0] === st.stitch) || STITCHES[0])[1] : '#1d1d1f') })
+      viewer.setAppearance({ mode: st.look, fabric: opt.fabric, pattern: (product.images || []).map(m => `https://static.wixstatic.com/media/${m}/v1/fit/w_900,h_900,q_85/${m}`), seam: (solid ? (STITCHES.find(x => x[0] === st.stitch) || STITCHES[0])[1] : '#1d1d1f') })
         .then(ok => { const f = st.look === 'print' && !ok; if (f !== st.printFailed) { st.printFailed = f; sync(); } });
     }
     if (opt.liner !== last.liner) { last.liner = opt.liner; viewer.setColors({ fabric: opt.fabric, liner: opt.liner }); }

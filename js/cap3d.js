@@ -19,26 +19,38 @@ function weaveTexture() {
   return t;
 }
 
-// Crop the print from the middle of a product photo and mirror-tile it so repeats are seamless.
-function patternTexture(url) {
-  return new Promise(res => {
-    const img = new Image(); img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const W = img.naturalWidth, H = img.naturalHeight, sw = W * 0.26, sh = H * 0.2, sx = W * 0.37, sy = H * 0.3;
-        const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d');
-        for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
-          x.save(); x.translate(i * 256 + (i ? 256 : 0), j * 256 + (j ? 256 : 0)); x.scale(i ? -1 : 1, j ? -1 : 1);
-          x.drawImage(img, sx, sy, sw, sh, 0, 0, 256, 256); x.restore();
-        }
-        x.getImageData(0, 0, 1, 1);
-        for (let k = 0; k < 512; k += 3) { x.fillStyle = 'rgba(0,0,0,.035)'; x.fillRect(k, 0, 1, 512); x.fillRect(0, k, 512, 1); }
-        const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-        res(t);
-      } catch (e) { res(null); }
-    };
-    img.onerror = () => res(null); img.src = url;
-  });
+// Print texture for the 3D cap. Takes one or more product photos, prefers the flat fabric swatch
+// (the photo with the least white background), crops a square without stretching and repeats it
+// unmirrored, so vehicles, animals and lettering read the right way round.
+function loadImg(url) {
+  return new Promise(res => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = url; });
+}
+function whiteShare(img) {
+  try {
+    const k = document.createElement('canvas'); k.width = k.height = 48; const x = k.getContext('2d');
+    x.drawImage(img, 0, 0, 48, 48); const d = x.getImageData(0, 0, 48, 48).data; let w = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] > 238 && d[i + 1] > 238 && d[i + 2] > 238) w++;
+    return w / (48 * 48);
+  } catch (e) { return 1; }
+}
+async function patternTexture(urls) {
+  const list = (Array.isArray(urls) ? urls : [urls]).filter(Boolean).slice(0, 6);
+  const imgs = (await Promise.all(list.map(loadImg))).filter(Boolean);
+  if (!imgs.length) return null;
+  try {
+    const scored = imgs.map(img => ({ img, w: whiteShare(img) })).sort((a, b) => a.w - b.w);
+    const best = scored[0], img = best.img, W = img.naturalWidth, H = img.naturalHeight;
+    let sx, sy, side;
+    if (best.w < 0.08) { side = Math.min(W, H) * 0.9; sx = (W - side) / 2; sy = (H - side) / 2; }   // flat swatch: use most of it
+    else { side = Math.min(W, H) * 0.34; sx = W * 0.5 - side / 2; sy = H * 0.42 - side / 2; }        // cap photo: square from the crown
+    const c = document.createElement('canvas'); c.width = c.height = 1024; const x = c.getContext('2d');
+    x.drawImage(img, sx, sy, side, side, 0, 0, 1024, 1024);
+    x.getImageData(0, 0, 1, 1);
+    for (let k = 0; k < 1024; k += 4) { x.fillStyle = 'rgba(0,0,0,.03)'; x.fillRect(k, 0, 1, 1024); x.fillRect(0, k, 1024, 1); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    t.userData = { swatch: best.w < 0.08 };
+    return t;
+  } catch (e) { return null; }
 }
 
 function shadowTexture() {
@@ -157,7 +169,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
   cap.add(outline);
 
   const tagMat = tag.material, flapMat = flapOut.material;
-  const fabricMeshes = [[fabric, [6, 2.2]], [bandMat, [7, 0.5]], [flapMat, [3.6, 0.7]]];
+  const fabricMeshes = [[fabric, [5, 1.8]], [bandMat, [6, 0.42]], [flapMat, [3, 0.6]]];
   let patReq = 0;
   let flapK = 1;
   let place = { phi: Math.PI * 1.5, s: 1.02 }, emb = null, locked = false, hover = false, dragging = null;
