@@ -10,6 +10,8 @@ export const CONFIG = {
   // Wix Stores app id, fixed by Wix for every Stores catalogue
   storesAppId: '215238eb-22a5-4c36-9e7b-e7c08025e04e',
   thankYouPath: '/thank-you.html',
+  // Cloudflare function that returns the whole product list in one cached request ('' = query Wix directly)
+  catalogEndpoint: '/api/catalog',
   // Products shown per "Load more" on the homepage
   pageSize: 12,
   // Footer social icons – shown only when a URL is set

@@ -4,7 +4,8 @@ import { CONFIG } from './config.js';
 
 const TOKENS_KEY = 'dbk.wixTokens';
 const LOCAL_CART_KEY = 'dbk.localCart';
-const LIST_CACHE_KEY = 'dbk.products.v2';
+const LIST_CACHE_KEY = 'dbk.products.v3';
+const LIST_TTL_MS = 30 * 60 * 1000;
 const LINKS_KEY = 'dbk.cartLinks'; // { embroideryLineId: capLineId }
 const readLinks = () => { try { return JSON.parse(localStorage.getItem(LINKS_KEY) || '{}'); } catch (e) { return {}; } };
 const writeLinks = l => localStorage.setItem(LINKS_KEY, JSON.stringify(l));
@@ -137,9 +138,19 @@ export async function listProducts({ includeHidden = false } = {}) {
   return includeHidden ? all : all.filter(p => !isHidden(p));
 }
 async function listAllProducts() {
-  try { const c = JSON.parse(sessionStorage.getItem(LIST_CACHE_KEY) || 'null'); if (c) { mode = c.mode; return c.items; } } catch (e) {}
+  // 1) this browser's saved copy (30 min)
+  try { const c = JSON.parse(localStorage.getItem(LIST_CACHE_KEY) || 'null'); if (c && Date.now() - (c.at || 0) < LIST_TTL_MS) { mode = c.mode; return c.items; } } catch (e) {}
   let items = null;
-  const c = await getClient();
+  // 2) one-request catalogue from the Cloudflare function (edge-cached)
+  if (CONFIG.catalogEndpoint && CONFIG.dataMode !== 'fallback') {
+    try {
+      const keep = CONFIG.embroidery?.productId || '';
+      const r = await fetch(CONFIG.catalogEndpoint + (keep ? '?keep=' + encodeURIComponent(keep) : ''));
+      if (r.ok) { const j = await r.json(); if (j.items?.length) { items = j.items.map(normV3); mode = 'live'; } }
+    } catch (e) { console.warn('[DBK] Catalogue endpoint failed, using Wix directly:', e?.message || e); }
+  }
+  // 3) Wix Headless directly (slower: 100 products per request)
+  const c = items ? null : await getClient();
   if (c) {
     try {
       let res;
@@ -155,7 +166,7 @@ async function listAllProducts() {
     const cat = await loadFallback(), mods = fallbackModifiers(cat);
     items = cat.products.map(p => normFallback(p, mods)); mode = 'fallback';
   }
-  try { sessionStorage.setItem(LIST_CACHE_KEY, JSON.stringify({ mode, items: items.map(p => ({ ...p, modifiers: [] })) })); } catch (e) {}
+  try { localStorage.setItem(LIST_CACHE_KEY, JSON.stringify({ at: Date.now(), mode, items: items.map(p => ({ ...p, modifiers: [], description: [], info: [] })) })); } catch (e) {}
   return items;
 }
 
