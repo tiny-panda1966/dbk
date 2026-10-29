@@ -37,7 +37,7 @@ export const CONFIG = {
     // and a free-text option that receives the design details. Leave '' to find it by name ("Embroidery …").
     productSlug: '',
     // Wix product ID of "Custom Embroidery" (takes priority over slug / name matching)
-    productId: 'db58675b-969f-411b-b054-1e79c66c56a9',
+    productId: '88f673d4-97b0-49fb-820c-bbf2fa545215',
     // Wix CMS collection that stores each design + placement preview (see README)
     designsCollection: 'embroideryDesigns',
     // Cloudflare Pages Function that uploads images to the Wix Media Manager and saves the CMS item
