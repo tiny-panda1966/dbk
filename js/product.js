@@ -25,7 +25,11 @@ choiceMods.forEach(m => { if (m.name === 'Cap Size') m.choices.sort((a, b) => si
 const textMods = p.modifiers.filter(m => m.type === 'FREE_TEXT');
 const [allItems, cats, capCatId] = await Promise.all([listProducts(), listCategories(), builderCategoryId()]);
 p.cats = allItems.find(x => x.id === p.id)?.cats || p.cats || [];
-const isCap = !capCatId || p.cats.includes(capCatId);
+// Welding caps get the 3D builder: anything in the builder category, plus any product named "… Welding Cap"
+// (e.g. "Logo | Image Embroidery Welding Cap", which sits in Custom Items).
+const isCap = !capCatId || p.cats.includes(capCatId) || /welding cap/i.test(p.name || '');
+// Logo / image products open the embroidery step on the upload option.
+const startMode = /logo|image/i.test(p.name || '') && /embroider/i.test(p.name || '') ? 'upload' : 'none';
 const myCat = cats.find(c => p.cats.includes(c.id));
 const state = { sel: {}, text: {}, qty: 1, photo: 0, tab: isCap ? '3d' : 'photos', tried: false };
 
@@ -117,7 +121,7 @@ function sync() {
   builder?.setOptions({ liner: linerMod && chosen(linerMod)?.hex, deep: billMod && /deep/i.test(chosen(billMod)?.name || '') });
 }
 
-if (isCap) builder = createBuilder({ wrap: $('[data-builder]'), step: $('[data-emb-step]'), stepNo: String(choiceMods.length + 1).padStart(2, '0'), product: p, threads, prices, onChange: () => sync() });
+if (isCap) builder = createBuilder({ wrap: $('[data-builder]'), step: $('[data-emb-step]'), stepNo: String(choiceMods.length + 1).padStart(2, '0'), product: p, threads, prices, startMode, onChange: () => sync() });
 
 $$('[data-tab]').forEach(b => b.onclick = () => { state.tab = b.dataset.tab; sync(); });
 $$('[data-ph]').forEach(b => b.onclick = () => { state.photo = +b.dataset.ph; sync(); });

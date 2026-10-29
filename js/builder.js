@@ -44,10 +44,10 @@ async function resize(dataUrl, max, type = 'image/png', q) {
   x.drawImage(img, 0, 0, c.width, c.height); return c.toDataURL(type, q);
 }
 
-export function createBuilder({ wrap, step, stepNo, product, threads, prices, onChange }) {
+export function createBuilder({ wrap, step, stepNo, product, threads, prices, onChange, startMode }) {
   const solid = isSolidCap(product);
   const stitchList = solid ? STITCHES.filter(([n]) => !sameColour(n, product.colour)) : [];
-  const st = { look: 'print', stitch: stitchList.some(x => x[0] === 'Black') ? 'Black' : (stitchList[0]?.[0] || 'Black'), view: 'front', mode: 'none', text: '', font: 'Yellowtail', thread: threads.includes('Black') ? 'Black' : threads[0],
+  const st = { look: 'print', stitch: stitchList.some(x => x[0] === 'Black') ? 'Black' : (stitchList[0]?.[0] || 'Black'), view: 'front', mode: startMode || 'none', text: '', font: 'Yellowtail', thread: threads.includes('Black') ? 'Black' : threads[0],
     scale: 100, rot: 0, upload: null, uploadName: '', locked: false, capture: null, place: null, fontQuery: '', fontCat: 'All', printFailed: false };
   const opt = { fabric: BASE[product.colour] || '#8e8d8a', liner: '#1b1b1c', deep: false };
   let viewer = null, last = {};
