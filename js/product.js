@@ -16,6 +16,8 @@ let slug = new URLSearchParams(location.search).get('slug');
 if (!slug) { const items = await listProducts(); slug = (findFeatured(items, FEATURED[0]) || items[0])?.slug; }
 const p0 = slug ? await getProduct(slug) : null;
 const p = p0 && !isHidden(p0) ? p0 : null;
+// Old or renamed link: send the visitor to search results for the words in the link instead of a dead end
+if (!p && slug && !p0) { const words = slug.replace(/[-_]+/g, ' ').replace(/\b(welding|cap|caps)\b/gi, ' ').trim(); if (words) { location.replace('index.html?cat=all&q=' + encodeURIComponent(words) + '#prints'); } }
 if (!p) { root.innerHTML = '<div class="pad"><h1 class="display">Product not found</h1><p><a href="index.html#prints" class="btn btn-dark" style="white-space:nowrap">See all products</a></p></div>'; throw new Error('not found'); }
 
 document.title = `${p.name} – DBK Welding Caps`;
