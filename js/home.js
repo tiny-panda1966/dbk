@@ -1,5 +1,5 @@
 import { mountChrome, esc, productUrl, reveal } from './ui.js';
-import { listProducts, listCategories, builderCategoryId, IMG, money, COLOURS } from './wix.js';
+import { listProducts, listCategories, builderCategoryId, getFirstPage, IMG, money, COLOURS } from './wix.js';
 import { CONFIG } from './config.js';
 
 await mountChrome();
@@ -12,7 +12,7 @@ const countEl = document.querySelector('[data-count]');
 const titleEl = document.querySelector('[data-title]');
 const searchEl = document.querySelector('[data-search]');
 const qs = new URLSearchParams(location.search);
-let all = [], cats = [], builderCat = null;
+let all = [], cats = [], builderCat = null, partialTotal = null;
 let cat = qs.get('cat') || '', colour = qs.get('colour') || 'All', q = qs.get('q') || '', shown = CONFIG.pageSize;
 searchEl.value = q;
 
@@ -45,7 +45,8 @@ function render() {
   filters.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { colour = b.dataset.c; shown = CONFIG.pageSize; pushUrl(); render(); });
 
   titleEl.textContent = q ? `Results for “${q}”` : co ? co.name : 'All products';
-  countEl.textContent = `${shownList.length} product${shownList.length === 1 ? '' : 's'}`;
+  const nShown = partialTotal ?? shownList.length;
+  countEl.textContent = `${nShown} product${nShown === 1 ? '' : 's'}`;
   grid.innerHTML = shownList.length ? shownList.slice(0, shown).map(p => {
     const isCap = builderCat && p.cats?.includes(builderCat);
     return `
@@ -64,7 +65,16 @@ let t; searchEl.oninput = () => { clearTimeout(t); t = setTimeout(() => { q = se
 searchEl.closest('form').onsubmit = e => { e.preventDefault(); q = searchEl.value.trim(); pushUrl(); render(); };
 
 try {
-  all = await listProducts();
+  // quick first draw: first page of welding caps + the category list, while the whole store loads
+  const first = await getFirstPage();
+  if (first) {
+    [cats, builderCat] = await Promise.all([listCategories(), builderCategoryId()]);
+    if (!cat || cat === (cats.find(c => c.id === builderCat)?.slug)) {
+      cat = cats.find(c => c.id === builderCat)?.slug || 'all';
+      if (!q && colour === 'All') { all = first.items; partialTotal = first.total; render(); }
+    }
+  }
+  all = await listProducts(); partialTotal = null;
   [cats, builderCat] = await Promise.all([listCategories(), builderCategoryId()]);
   if (!cat || (cat !== 'all' && !cats.some(c => c.slug === cat))) cat = cats.find(c => c.id === builderCat)?.slug || 'all';
   document.querySelectorAll('[data-total]').forEach(e => e.textContent = all.filter(p => p.cats?.includes(builderCat)).length || all.length);

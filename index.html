@@ -10,6 +10,13 @@
 <link rel="preconnect" href="https://static.wixstatic.com">
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/site.css">
+<script>
+// Start loading products before the page code arrives (skipped when this browser has a fresh saved copy)
+(function () { try { var c = JSON.parse(localStorage.getItem('dbk.products.v3') || 'null'); if (c && Date.now() - (c.at || 0) < 18e5) return; } catch (e) {}
+  var j = function (r) { return r.ok ? r.json() : null; }, n = function () { return null; };
+  window.__dbkFirst = fetch('/api/catalog?part=first&cat=Welding%20Caps&n=12').then(j).catch(n);
+  window.__dbkFull = fetch('/api/catalog').then(j).catch(n); })();
+</script>
 <script type="module" src="js/home.js"></script>
 </head>
 <body>

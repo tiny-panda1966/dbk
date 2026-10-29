@@ -137,6 +137,31 @@ export async function listProducts({ includeHidden = false } = {}) {
   const all = await listAllProducts();
   return includeHidden ? all : all.filter(p => !isHidden(p));
 }
+// Categories from the catalogue function (with product counts), kept in this browser for 30 minutes
+const CATS_KEY = 'dbk.cats.v1';
+let serverCats = null;
+function rememberCats(cats) {
+  if (!cats?.length) return;
+  serverCats = cats;
+  try { localStorage.setItem(CATS_KEY, JSON.stringify({ at: Date.now(), cats })); } catch (e) {}
+}
+function savedCats() {
+  if (serverCats) return serverCats;
+  try { const c = JSON.parse(localStorage.getItem(CATS_KEY) || 'null'); if (c && Date.now() - (c.at || 0) < LIST_TTL_MS) return (serverCats = c.cats); } catch (e) {}
+  return null;
+}
+const fullListSaved = () => { try { const c = JSON.parse(localStorage.getItem(LIST_CACHE_KEY) || 'null'); return !!(c && Date.now() - (c.at || 0) < LIST_TTL_MS); } catch (e) { return false; } };
+// First page of one category in a small request, so the homepage can draw before the whole store arrives.
+// Returns null when this browser already has the full list saved (that's faster still).
+export async function getFirstPage() {
+  if (!CONFIG.catalogEndpoint || CONFIG.dataMode === 'fallback' || fullListSaved()) return null;
+  try {
+    const j = await (window.__dbkFirst || fetch(`${CONFIG.catalogEndpoint}?part=first&cat=${encodeURIComponent(CONFIG.builderCategory || '')}&n=${CONFIG.pageSize || 12}`).then(r => r.ok ? r.json() : null));
+    if (!j?.items?.length) return null;
+    rememberCats(j.cats);
+    return { items: j.items.map(normV3).filter(p => !isHidden(p)), total: j.total };
+  } catch (e) { return null; }
+}
 async function listAllProducts() {
   // 1) this browser's saved copy (30 min)
   try { const c = JSON.parse(localStorage.getItem(LIST_CACHE_KEY) || 'null'); if (c && Date.now() - (c.at || 0) < LIST_TTL_MS) { mode = c.mode; return c.items; } } catch (e) {}
@@ -144,9 +169,8 @@ async function listAllProducts() {
   // 2) one-request catalogue from the Cloudflare function (edge-cached)
   if (CONFIG.catalogEndpoint && CONFIG.dataMode !== 'fallback') {
     try {
-      const keep = CONFIG.embroidery?.productId || '';
-      const r = await fetch(CONFIG.catalogEndpoint + (keep ? '?keep=' + encodeURIComponent(keep) : ''));
-      if (r.ok) { const j = await r.json(); if (j.items?.length) { items = j.items.map(normV3); mode = 'live'; } }
+      const j = await (window.__dbkFull || fetch(CONFIG.catalogEndpoint).then(r => r.ok ? r.json() : null));
+      if (j?.items?.length) { items = j.items.map(normV3); mode = 'live'; rememberCats(j.cats); }
     } catch (e) { console.warn('[DBK] Catalogue endpoint failed, using Wix directly:', e?.message || e); }
   }
   // 3) Wix Headless directly (slower: 100 products per request)
@@ -371,11 +395,26 @@ const norm = s => (s || '').toLowerCase().replace(/[^a-z]+/g, ' ').trim().split(
 export const slugify = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 let catPromise = null;
 // [{ id, name, slug, count }]: all visible Wix categories that have visible products, main ones first (CONFIG.categories order)
+// Every visible Wix category with products is shown automatically. CONFIG.categories only sets the order
+// of the main ones; any others follow alphabetically. CONFIG.hiddenCategories are never shown.
+function shapeCats(list, want, countOf) {
+  const skip = (CONFIG.hiddenCategories || []).map(norm);
+  const rank = n => { const i = want.findIndex(x => norm(x) === norm(n)); return i < 0 ? 999 : i; };
+  return list
+    .filter(x => x.visible !== false && x.name && !skip.includes(norm(x.name)))
+    .map(wc => ({ id: wc._id || wc.id, name: wc.name, slug: wc.slug || slugify(wc.name), count: countOf(wc) }))
+    .filter(x => x.count)
+    .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
+}
 export function listCategories() {
   if (catPromise) return catPromise;
   catPromise = (async () => {
-    const items = await listProducts();
     const want = CONFIG.categories || [];
+    let quick = savedCats();
+    if (!quick && window.__dbkFirst) { await getFirstPage(); quick = savedCats(); }
+    if (quick) return shapeCats(quick, want, x => x.count || 0);
+    const items = await listProducts();
+    if (savedCats()) return shapeCats(savedCats(), want, x => x.count || 0);
     let wixCats = [];
     const c = await getClient();
     if (c?.categories && mode === 'live') {
@@ -392,16 +431,7 @@ export function listCategories() {
       } catch (e) { console.warn('[DBK] Category query failed:', e?.message || e); }
     }
     if (mode !== 'live') wixCats = [{ _id: 'welding-caps', name: 'Welding Caps', slug: 'welding-caps', visible: true }];
-    // Every visible Wix category with products is shown automatically. CONFIG.categories only sets the order
-    // of the main ones; any others follow alphabetically. CONFIG.hiddenCategories are never shown.
-    const skip = (CONFIG.hiddenCategories || []).map(norm);
-    const rank = n => { const i = want.findIndex(x => norm(x) === norm(n)); return i < 0 ? 999 : i; };
-    const out = wixCats
-      .filter(x => x.visible !== false && x.name && !skip.includes(norm(x.name)))
-      .map(wc => { const id = wc._id || wc.id; return { id, name: wc.name, slug: wc.slug || slugify(wc.name), count: items.filter(p => p.cats?.includes(id)).length }; })
-      .filter(x => x.count)
-      .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
-    return out;
+    return shapeCats(wixCats, want, wc => { const id = wc._id || wc.id; return items.filter(p => p.cats?.includes(id)).length; });
   })();
   return catPromise;
 }
