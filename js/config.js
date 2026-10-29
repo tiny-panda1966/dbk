@@ -22,8 +22,11 @@ export const CONFIG = {
   },
   // Wix CMS collection for FAQs (fields: category, question, answer, sortOrder; Read permission: Anyone)
   faqCollection: 'faqs',
-  // Categories shown on the site, in this order. Matched to Wix Stores category names (case/plural-insensitive).
+  // Every visible Wix Stores category with products appears on the site automatically.
+  // This list only sets the order of the main ones (others follow A–Z). Matched case/plural-insensitive.
   categories: ['Welding Caps', 'Fabric', 'Custom Items', 'Embroidery Designs', 'Beanies', 'Accessories', 'Skull Caps', 'PDF Patterns'],
+  // Wix categories never shown on the site (Wix's built-in "All Products" plus any hidden helper categories)
+  hiddenCategories: ['All Products', 'Surplus', 'Embroidery enabled', 'Vinyl enabled'],
   // Stitch colours offered on caps with "Solid" in the name – names must match the embroidery thread colours
   stitchColours: ['Black', 'Black (Charcoal)', 'Blue', 'Brown', 'Cream', 'Gray', 'Green', 'Green (Lime)', 'Orange', 'Pink', 'Purple', 'Red', 'White', 'Yellow'],
   // Wix CMS collection for admin settings (fields: key, value – Text; permission Read: Anyone). Holds "popularPrints".

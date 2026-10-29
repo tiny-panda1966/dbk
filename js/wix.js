@@ -359,7 +359,7 @@ export async function getSetting(key) {
 const norm = s => (s || '').toLowerCase().replace(/[^a-z]+/g, ' ').trim().split(' ').map(x => x.replace(/s$/, '')).join(' ');
 export const slugify = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 let catPromise = null;
-// [{ id, name, slug, count }] in CONFIG.categories order, only categories that have visible products
+// [{ id, name, slug, count }]: all visible Wix categories that have visible products, main ones first (CONFIG.categories order)
 export function listCategories() {
   if (catPromise) return catPromise;
   catPromise = (async () => {
@@ -381,12 +381,15 @@ export function listCategories() {
       } catch (e) { console.warn('[DBK] Category query failed:', e?.message || e); }
     }
     if (mode !== 'live') wixCats = [{ _id: 'welding-caps', name: 'Welding Caps', slug: 'welding-caps', visible: true }];
-    const out = want.map(name => {
-      const wc = wixCats.find(x => x.visible !== false && norm(x.name) === norm(name));
-      if (!wc) return null;
-      const id = wc._id || wc.id;
-      return { id, name: wc.name || name, slug: wc.slug || slugify(name), count: items.filter(p => p.cats?.includes(id)).length };
-    }).filter(x => x && x.count);
+    // Every visible Wix category with products is shown automatically. CONFIG.categories only sets the order
+    // of the main ones; any others follow alphabetically. CONFIG.hiddenCategories are never shown.
+    const skip = (CONFIG.hiddenCategories || []).map(norm);
+    const rank = n => { const i = want.findIndex(x => norm(x) === norm(n)); return i < 0 ? 999 : i; };
+    const out = wixCats
+      .filter(x => x.visible !== false && x.name && !skip.includes(norm(x.name)))
+      .map(wc => { const id = wc._id || wc.id; return { id, name: wc.name, slug: wc.slug || slugify(wc.name), count: items.filter(p => p.cats?.includes(id)).length }; })
+      .filter(x => x.count)
+      .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
     return out;
   })();
   return catPromise;
