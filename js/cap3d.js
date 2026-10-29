@@ -33,22 +33,70 @@ function whiteShare(img) {
     return w / (48 * 48);
   } catch (e) { return 1; }
 }
+// Fabric prints repeat on a fixed grid, but product photos rarely end exactly on a repeat. Find the repeat
+// distance along one axis by comparing the photo with shifted copies of itself (grey, downsampled).
+function grey(img, sx, sy, sw, sh, W) {
+  const H = Math.round(W * sh / sw), k = document.createElement('canvas'); k.width = W; k.height = H;
+  const x = k.getContext('2d'); x.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+  const d = x.getImageData(0, 0, W, H).data, g = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) g[i] = d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11;
+  return { g, W, H };
+}
+function findPeriod({ g, W, H }, axis) {
+  const L = axis === 'x' ? W : H, min = Math.round(L * 0.18), max = Math.round(L * 0.82), at = (x, y) => g[y * W + x];
+  const diff = p => { let s = 0, n = 0;
+    if (axis === 'x') { for (let y = 0; y < H; y += 2) for (let x = 0; x + p < W; x += 2) { s += Math.abs(at(x, y) - at(x + p, y)); n++; } }
+    else { for (let y = 0; y + p < H; y += 2) for (let x = 0; x < W; x += 2) { s += Math.abs(at(x, y) - at(x, y + p)); n++; } }
+    return n ? s / n : 999; };
+  const scores = []; for (let p = min; p <= max; p++) scores.push([p, diff(p)]);
+  if (!scores.length) return 0;
+  const sorted = scores.map(v => v[1]).sort((a, b) => a - b), median = sorted[sorted.length >> 1];
+  const best = scores.reduce((a, b) => (b[1] < a[1] ? b : a));
+  return best[1] < median * 0.55 ? best[0] / L : 0;   // fraction of the crop; 0 = no clear repeat
+}
+// Make a tile wrap smoothly along an axis with no known repeat: fade the far edge band over the near edge.
+function crossFade(src, axis, frac = 0.1) {
+  const w = src.width, h = src.height, b = Math.round((axis === 'x' ? w : h) * frac);
+  const out = document.createElement('canvas'); out.width = axis === 'x' ? w - b : w; out.height = axis === 'y' ? h - b : h;
+  const x = out.getContext('2d'); x.drawImage(src, 0, 0);
+  const band = document.createElement('canvas'); band.width = axis === 'x' ? b : w; band.height = axis === 'y' ? b : h;
+  const bx = band.getContext('2d');
+  if (axis === 'x') bx.drawImage(src, w - b, 0, b, h, 0, 0, b, h); else bx.drawImage(src, 0, h - b, w, b, 0, 0, w, b);
+  const gr = axis === 'x' ? bx.createLinearGradient(0, 0, b, 0) : bx.createLinearGradient(0, 0, 0, b);
+  gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  bx.globalCompositeOperation = 'destination-in'; bx.fillStyle = gr; bx.fillRect(0, 0, band.width, band.height);
+  x.drawImage(band, 0, 0);
+  return out;
+}
 async function patternTexture(urls) {
   const list = (Array.isArray(urls) ? urls : [urls]).filter(Boolean).slice(0, 6);
   const imgs = (await Promise.all(list.map(loadImg))).filter(Boolean);
   if (!imgs.length) return null;
   try {
     const scored = imgs.map(img => ({ img, w: whiteShare(img) })).sort((a, b) => a.w - b.w);
-    const best = scored[0], img = best.img, W = img.naturalWidth, H = img.naturalHeight;
-    let sx, sy, side;
-    if (best.w < 0.08) { side = Math.min(W, H) * 0.9; sx = (W - side) / 2; sy = (H - side) / 2; }   // flat swatch: use most of it
-    else { side = Math.min(W, H) * 0.34; sx = W * 0.5 - side / 2; sy = H * 0.42 - side / 2; }        // cap photo: square from the crown
-    const c = document.createElement('canvas'); c.width = c.height = 1024; const x = c.getContext('2d');
-    x.drawImage(img, sx, sy, side, side, 0, 0, 1024, 1024);
+    const best = scored[0], img = best.img, W = img.naturalWidth, H = img.naturalHeight, swatch = best.w < 0.08;
+    // crop: whole swatch (minus a hairline border), or a square from the crown of a cap photo
+    let sx, sy, sw, sh;
+    if (swatch) { sx = W * 0.02; sy = H * 0.02; sw = W * 0.96; sh = H * 0.96; }
+    else { sw = sh = Math.min(W, H) * 0.34; sx = W * 0.5 - sw / 2; sy = H * 0.42 - sh / 2; }
+    let px = 0, py = 0;
+    if (swatch) { const gm = grey(img, sx, sy, sw, sh, 220); px = findPeriod(gm, 'x'); py = findPeriod(gm, 'y'); }
+    const tw = px ? sw * px : sw, th = py ? sh * py : sh;
+    const scale = 1024 / Math.max(tw, th);
+    let tile = document.createElement('canvas'); tile.width = Math.round(tw * scale); tile.height = Math.round(th * scale);
+    tile.getContext('2d').drawImage(img, sx, sy, tw, th, 0, 0, tile.width, tile.height);
+    if (!px) tile = crossFade(tile, 'x');
+    if (!py) tile = crossFade(tile, 'y');
+    // square texture so the cap's repeat counts keep motifs in proportion
+    const side = Math.max(tile.width, tile.height), c = document.createElement('canvas'); c.width = c.height = 1024;
+    const x = c.getContext('2d');
+    const rx = Math.max(1, Math.round(side / tile.width)), ry = Math.max(1, Math.round(side / tile.height));
+    const cw = 1024 / rx, ch = 1024 / ry;
+    for (let i = 0; i < rx; i++) for (let j = 0; j < ry; j++) x.drawImage(tile, i * cw, j * ch, cw, ch);
     x.getImageData(0, 0, 1, 1);
     for (let k = 0; k < 1024; k += 4) { x.fillStyle = 'rgba(0,0,0,.03)'; x.fillRect(k, 0, 1, 1024); x.fillRect(0, k, 1024, 1); }
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-    t.userData = { swatch: best.w < 0.08 };
+    t.userData = { swatch, repeatX: !!px, repeatY: !!py, sizeK: Math.max(tw / sw, th / sh) };
     return t;
   } catch (e) { return null; }
 }
