@@ -203,9 +203,10 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     tagTex.needsUpdate = true;
   };
   drawTag(null);
-  { const img = new Image(); img.onload = () => drawTag(img); img.src = new URL('../assets/dbk-logo.avif', import.meta.url).href; }
+  { const img = new Image(); img.onload = () => drawTag(img); try { img.src = (window.__resources && window.__resources.tagLogo) || new URL('../assets/dbk-logo.avif', import.meta.url).href; } catch (e) {} }
   const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.163), new THREE.MeshStandardMaterial({ map: tagTex, roughness: 0.85, side: THREE.DoubleSide }));
-  const ta = Math.PI + 0.95; // DBK tag on the right side, where staff sew it tag.position.set(Math.sin(ta) * 1.02, -bandH - 0.12, Math.cos(ta) * 1.02); tag.rotation.y = ta; cap.add(tag);
+  const ta = Math.PI + 0.95; // DBK tag on the right side, where staff sew it
+  tag.position.set(Math.sin(ta) * 1.02, -bandH - 0.12, Math.cos(ta) * 1.02); tag.rotation.y = ta; cap.add(tag);
 
   // embroidery patch
   const embCanvas = document.createElement('canvas'); embCanvas.width = embCanvas.height = 1024;
@@ -333,7 +334,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
       m.font = `${emb.weight || 400} ${fs}px "${emb.font}"`; m.textAlign = 'center'; m.textBaseline = 'middle';
       m.fillStyle = '#000'; m.lineJoin = 'round'; m.lineWidth = Math.max(2, fs / 60); m.strokeStyle = '#000';
       m.fillText(emb.text, 0, 0); m.strokeText(emb.text, 0, 0);
-    } else if (emb.mode === 'upload' && emb.upload) {
+    } else if ((emb.mode === 'upload' || emb.mode === 'stitch') && emb.upload) {
       const img = await new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = emb.upload; });
       if (!img) { embTex.needsUpdate = true; return; }
       const k = Math.min(820 / img.width, 820 / img.height), w = img.width * k, h = img.height * k;
@@ -344,6 +345,8 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     const fill = document.createElement('canvas'); fill.width = fill.height = 1024; const fx = fill.getContext('2d');
     if (emb.mode === 'text') {
       fx.drawImage(stitchFill(th, -0.6, 7), 0, 0);
+    } else if (emb.mode === 'stitch') {
+      fx.drawImage(mask, 0, 0); // real stitches from a DST font: already shaded, no fake satin overlay
     } else {
       fx.drawImage(mask, 0, 0);
       fx.globalCompositeOperation = 'multiply'; fx.globalAlpha = 0.55; fx.drawImage(stitchFill({ c: '#ffffff', l: '#ffffff', d: '#8a8a8a' }, -0.6, 6), 0, 0);
@@ -354,7 +357,7 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     const edge = (dx, dy, col, a) => { const c = document.createElement('canvas'); c.width = c.height = 1024; const cx = c.getContext('2d');
       cx.fillStyle = col; cx.fillRect(0, 0, 1024, 1024); cx.globalCompositeOperation = 'destination-out'; cx.drawImage(mask, dx, dy);
       cx.globalCompositeOperation = 'destination-in'; cx.drawImage(mask, 0, 0); fx.globalAlpha = a; fx.drawImage(c, 0, 0); fx.globalAlpha = 1; };
-    edge(-4, -4, '#000', 0.45); edge(4, 4, '#fff', 0.35);
+    if (emb.mode !== 'stitch') { edge(-4, -4, '#000', 0.45); edge(4, 4, '#fff', 0.35); }
     // No outline border: just the raised stitched fill with a soft contact shadow.
     x.save(); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 8; x.shadowOffsetY = 4; x.drawImage(fill, 0, 0); x.restore();
     embTex.needsUpdate = true;

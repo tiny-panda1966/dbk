@@ -29,7 +29,11 @@ const [allItems, cats, capCatId] = await Promise.all([listProducts(), listCatego
 p.cats = allItems.find(x => x.id === p.id)?.cats || p.cats || [];
 // Welding caps get the 3D builder: anything in the builder category, plus any product named "… Welding Cap"
 // (e.g. "Logo | Image Embroidery Welding Cap", which sits in Custom Items).
-const isCap = !capCatId || p.cats.includes(capCatId) || /welding cap/i.test(p.name || '');
+// Custom Items and Embroidery Designs: embroidery step but no 3D cap; the selected photo is saved instead.
+const photoCatIds = cats.filter(c => /custom items|embroidery designs/i.test(c.name || '')).map(c => c.id);
+const photoOnly = p.cats.some(id => photoCatIds.includes(id));
+const isCap = !photoOnly && (!capCatId || p.cats.includes(capCatId) || /welding cap/i.test(p.name || ''));
+const hasEmb = isCap || photoOnly;
 // Logo / image products open the embroidery step on the upload option.
 const startMode = /logo|image/i.test(p.name || '') && /embroider/i.test(p.name || '') ? 'upload' : 'none';
 const myCat = cats.find(c => p.cats.includes(c.id));
@@ -78,7 +82,7 @@ root.innerHTML = `
         </div>
         <p class="step-err" hidden>Choose a ${esc(label(m).toLowerCase())}</p>
       </section>`).join('')}
-      ${isCap ? '<section class="step" data-emb-step></section>' : ''}
+      ${hasEmb ? '<section class="step" data-emb-step></section>' : ''}
       <div data-instr></div>
       ${textMods.map(m => `
       <label class="field"><span><strong>${esc(m.name.replace(' (Please Specify)', ''))}</strong> <span class="muted">· optional</span></span>
@@ -123,7 +127,7 @@ function sync() {
   builder?.setOptions({ liner: linerMod && chosen(linerMod)?.hex, deep: billMod && /deep/i.test(chosen(billMod)?.name || '') });
 }
 
-if (isCap) builder = createBuilder({ wrap: $('[data-builder]'), step: $('[data-emb-step]'), stepNo: String(choiceMods.length + 1).padStart(2, '0'), product: p, threads, prices, startMode, onChange: () => sync() });
+if (hasEmb) builder = createBuilder({ photoOnly, getPhoto: () => p.images[state.photo] ? { url: IMG_FIT(p.images[state.photo], 900), n: state.photo + 1, total: p.images.length } : null, wrap: $('[data-builder]') || document.createElement('div'), step: $('[data-emb-step]'), stepNo: String(choiceMods.length + 1).padStart(2, '0'), product: p, threads, prices, startMode, onChange: () => sync() });
 
 $$('[data-tab]').forEach(b => b.onclick = () => { state.tab = b.dataset.tab; sync(); });
 $$('[data-ph]').forEach(b => b.onclick = () => { state.photo = +b.dataset.ph; sync(); });
@@ -241,8 +245,8 @@ function renderInstr() {
   ta.oninput = () => { state.instr = ta.value; renderConfirm(); };
   renderConfirm();
 }
-if (isCap) renderMember();
-if (isCap) (async () => {
+if (hasEmb) renderMember();
+if (hasEmb) (async () => {
   member = await getMember().catch(() => null);
   if (!member) return renderMember();
   prefs = await getPrefs();

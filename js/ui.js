@@ -63,7 +63,6 @@ function headerHtml() {
         <div class="mega-col wide">
           <span class="kicker">Popular prints</span>
           <div class="mega-picks" data-mega-picks></div>
-          <a href="product.html" class="mega-build"><span><strong>Customize your cap</strong><small>Size, liner, bill and options in one place</small></span><span aria-hidden="true">→</span></a>
         </div>
       </div>
     </div>
@@ -89,7 +88,7 @@ function footerHtml() {
     <div class="foot-brand"><img src="assets/dbk-logo.avif" alt="DBK Welding Caps" class="foot-logo"><p>Handmade welding caps by DBK – Welding Caps.</p>
       ${social.length ? `<div class="foot-social">${social.map(([k, url]) => `<a href="${esc(url)}" target="_blank" rel="noopener" aria-label="${k[0].toUpperCase() + k.slice(1)}">${ICONS[k] || k}</a>`).join('')}</div>` : ''}</div>
     <nav class="foot-links" aria-label="Footer">
-      <a href="index.html#prints">Shop</a><a href="product.html">Customize your cap</a><a href="account.html">Members</a>
+      <a href="index.html#prints">Shop</a><a href="account.html">Members</a>
       <a href="faq.html">FAQs</a><a href="contact.html">Contact</a><button type="button" class="link-btn" data-open-policy>Shipping &amp; Returns</button>
     </nav>
     <div class="foot-meta"><a href="mailto:${esc(email)}">${esc(email)}</a><span>Phone / text: ${esc(phone)}</span><span>© ${new Date().getFullYear()} DBK – Welding Caps</span></div>

@@ -36,7 +36,7 @@ function linkFonts() {
   const fam = FONTS.map(f => 'family=' + f.name.replace(/ /g, '+') + (f.weight !== 400 ? ':wght@' + f.weight : '')).join('&');
   const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = `https://fonts.googleapis.com/css2?${fam}&display=swap`; document.head.appendChild(l);
 }
-const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+const loadImg = src => new Promise((res, rej) => { const i = new Image(); if (!/^data:|^blob:/.test(src)) i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
 async function resize(dataUrl, max, type = 'image/png', q) {
   const img = await loadImg(dataUrl), k = Math.min(1, max / Math.max(img.width || max, img.height || max));
   const c = document.createElement('canvas'); c.width = Math.round((img.width || max) * k); c.height = Math.round((img.height || max) * k);
@@ -44,7 +44,8 @@ async function resize(dataUrl, max, type = 'image/png', q) {
   x.drawImage(img, 0, 0, c.width, c.height); return c.toDataURL(type, q);
 }
 
-export function createBuilder({ wrap, step, stepNo, product, threads, prices, onChange, startMode }) {
+// photoOnly: no 3D cap (Custom Items, Embroidery Designs). The customer's chosen product photo is saved as the preview.
+export function createBuilder({ wrap, step, stepNo, product, threads, prices, onChange, startMode, photoOnly = false, getPhoto }) {
   const solid = isSolidCap(product);
   const stitchList = solid ? STITCHES.filter(([n]) => !sameColour(n, product.colour)) : [];
   const st = { look: 'print', stitch: stitchList.some(x => x[0] === 'Black') ? 'Black' : (stitchList[0]?.[0] || 'Black'), view: 'front', mode: startMode || 'none', text: '', font: 'Yellowtail', thread: threads.includes('Black') ? 'Black' : threads[0],
@@ -52,7 +53,7 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
   const opt = { fabric: BASE[product.colour] || '#8e8d8a', liner: '#1b1b1c', deep: false };
   let viewer = null, last = {};
 
-  wrap.innerHTML = `
+  wrap.innerHTML = photoOnly ? '' : `
     <div class="stage" data-stage><div class="stage-load">Loading 3D cap…</div></div>
     <div class="model-row">
       ${solid ? `<div class="seg seg-wrap"><span class="kicker">Stitch colour <span data-stitch-name></span></span><div class="seam-sw">${stitchList.map(([n, h]) => `<button type="button" data-stitch="${n}" title="${n}" aria-label="${n} stitching"><span style="background:${h}"></span></button>`).join('')}</div></div>` : ''}
@@ -92,11 +93,11 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
         <div class="threads">${threads.map(n => `<button type="button" data-thread="${esc(n)}" title="${esc(n)}"><span style="background:${threadHex(n)}"></span></button>`).join('')}</div>
         <span class="note">100% cotton thread, fire-resistant to industry standard.</span>
       </div>
-      <div class="sliders">
+      <div class="sliders"${photoOnly ? ' hidden' : ''}>
         <label class="field"><span><strong>Size</strong> <span class="mono" data-scale-v></span></span><input type="range" min="50" max="150" step="5" value="100" data-scale></label>
         <label class="field"><span><strong>Rotation</strong> <span class="mono" data-rot-v></span></span><input type="range" min="-45" max="45" step="1" value="0" data-rot></label>
       </div>
-      <p class="note">Drag the embroidery on the 3D cap to place it anywhere on the crown, band or flaps, then lock the position.</p>
+      <p class="note">${photoOnly ? 'We save the photo you have selected with your order. Kelly places the embroidery to match and emails a proof before it’s made.' : 'Drag the embroidery on the 3D cap to place it anywhere on the crown, band or flaps, then lock the position.'}</p>
     </div>`;
 
   const W = s => wrap.querySelector(s), S = s => step.querySelector(s), SA = s => [...step.querySelectorAll(s)];
@@ -115,12 +116,14 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
   function sync() {
     wrap.querySelectorAll('[data-stitch]').forEach(b => b.classList.toggle('on', b.dataset.stitch === st.stitch));
     const sn = W('[data-stitch-name]'); if (sn) sn.textContent = '· ' + st.stitch;
-    W('[data-look-note]').textContent = st.look === 'print' ? (st.printFailed ? 'The print couldn’t be loaded, so the model shows the base colour.' : 'Print preview taken from the product photo. Kelly emails a stitch proof on your real fabric.') : st.look === 'colour' ? 'Showing the fabric’s base colour.' : 'Plain white cap, for placing embroidery clearly. Your liner colour shows inside.';
+    if (!photoOnly) W('[data-look-note]').textContent = st.look === 'print' ? (st.printFailed ? 'The print couldn’t be loaded, so the model shows the base colour.' : 'Print preview taken from the product photo. Kelly emails a stitch proof on your real fabric.') : st.look === 'colour' ? 'Showing the fabric’s base colour.' : 'Plain white cap, for placing embroidery clearly. Your liner colour shows inside.';
     const on = !!active();
-    W('[data-place-row]').hidden = !on;
-    W('[data-place-text]').textContent = (st.locked && st.capture ? st.capture.text : st.place?.text) || '—';
-    W('[data-lock]').textContent = st.locked ? 'Edit position' : 'Lock position';
-    W('[data-face]').disabled = st.locked;
+    if (!photoOnly) {
+      W('[data-place-row]').hidden = !on;
+      W('[data-place-text]').textContent = (st.locked && st.capture ? st.capture.text : st.place?.text) || '—';
+      W('[data-lock]').textContent = st.locked ? 'Edit position' : 'Lock position';
+      W('[data-face]').disabled = st.locked;
+    }
     SA('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === st.mode));
     S('[data-emb-text]').hidden = st.mode !== 'text';
     S('[data-emb-upload]').hidden = st.mode !== 'upload';
@@ -130,7 +133,7 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
     SA('[data-thread]').forEach(b => b.classList.toggle('on', b.dataset.thread === st.thread));
     S('[data-thread-name]').textContent = '· ' + st.thread;
     S('[data-scale-v]').textContent = st.scale + '%'; S('[data-rot-v]').textContent = st.rot + '°';
-    S('[data-emb-val]').textContent = st.mode === 'none' ? 'Optional' : !on ? (st.mode === 'text' ? 'Type your text' : 'Choose a file') : st.locked ? 'Position locked' : 'Drag to position';
+    S('[data-emb-val]').textContent = st.mode === 'none' ? 'Optional' : !on ? (st.mode === 'text' ? 'Type your text' : 'Choose a file') : photoOnly ? 'Added' : st.locked ? 'Position locked' : 'Drag to position';
     syncViewer(); onChange && onChange();
   }
 
@@ -153,8 +156,8 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
 
   const unlock = () => { st.locked = false; st.capture = null; };
   wrap.querySelectorAll('[data-stitch]').forEach(b => b.onclick = () => { st.stitch = b.dataset.stitch; sync(); });
-  W('[data-face]').onclick = () => { if (!st.locked && viewer) viewer.faceCamera(); };
-  W('[data-lock]').onclick = () => {
+  if (!photoOnly) W('[data-face]').onclick = () => { if (!st.locked && viewer) viewer.faceCamera(); };
+  if (!photoOnly) W('[data-lock]').onclick = () => {
     if (!viewer) return;
     if (st.locked) unlock(); else { st.locked = true; st.capture = { png: viewer.capture(), ...viewer.describe() }; }
     sync();
@@ -176,7 +179,7 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
     r.readAsDataURL(f);
   };
 
-  (async () => {
+  if (!photoOnly) (async () => {
     try {
       const [THREE, m] = await Promise.all([import('../vendor/three.module.min.js'), import('./cap3d.js')]);
       const stage = W('[data-stage]'); stage.innerHTML = '<div class="stage-hint">Drag to rotate · drag the embroidery to move it</div>';
@@ -200,6 +203,12 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
     state: () => st,
     async snapshot() {
       if (!active()) return null;
+      if (photoOnly) {
+        const ph = getPhoto ? getPhoto() : null;
+        let preview = ''; try { if (ph?.url) preview = await resize(ph.url, 640, 'image/jpeg', 0.82); } catch (e) {}
+        return { mode: st.mode, text: st.text.trim(), font: F().name, thread: st.thread, scale: st.scale, rot: st.rot,
+          uploadName: st.uploadName, logo: st.mode === 'upload' ? st.upload : '', placement: ph ? `As shown in photo ${ph.n} of ${ph.total}` : 'As shown in product photo', locked: true, preview };
+      }
       const cap = st.locked && st.capture ? st.capture : viewer ? { png: viewer.capture(), ...viewer.describe() } : null;
       let preview = ''; try { if (cap?.png) preview = await resize(cap.png, 640, 'image/jpeg', 0.82); } catch (e) {}
       return { mode: st.mode, text: st.text.trim(), font: F().name, thread: st.thread, scale: st.scale, rot: st.rot,
