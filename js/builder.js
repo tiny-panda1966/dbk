@@ -18,9 +18,42 @@ export const STITCHES = (CONFIG.stitchColours || []).map(n => [n, threadHex(n)])
 // Embroidery fonts are Kelly's own Embrilliance lettering, exported as DST stitch files (characters in the order of DEFAULT_CHARS in dst-font.js).
 // To add a font: export it from Embrilliance as .dst, put it in data/fonts/ and add a line here.
 const STITCH_FONTS = [
-  { name: 'Alphi Bold', file: 'alphi-bold.dst' },
+  { name: 'Alphi Bold', file: 'Alphii Bold.dst' },
+  { name: 'Back To Black', file: 'Back To Black.dst' },
+  { name: 'Barbie', file: 'Barbie.dst' },
+  { name: 'Be Mine', file: 'Be Mine.dst' },
+  { name: 'Betty', file: 'Betty.dst' },
+  { name: 'Blaze', file: 'Blaze.dst' },
+  { name: 'Block', file: 'Block.dst' },
+  { name: 'Cactus', file: 'Cactus.dst' },
+  { name: 'Caroline', file: 'Caroline.dst' },
+  { name: 'Cars', file: 'Cars.dst' },
+  { name: 'Chickweed', file: 'Chickweed.dst' },
+  { name: 'Copper', file: 'Copper.dst' },
+  { name: 'Daquiri', file: 'Daquiri.dst' },
+  { name: 'Desyrel', file: 'Desyrel.dst' },
+  { name: 'Grinch', file: 'Grinch.dst' },
+  { name: 'Hobo', file: 'Hobo.dst' },
+  { name: 'Kengwin', file: 'Kengwin.dst' },
+  { name: 'Kristy', file: 'Kristy.dst' },
+  { name: 'Lucinda', file: 'Lucinda.dst' },
+  { name: 'Magneto', file: 'Magneto.dst' },
+  { name: 'Mandarin', file: 'Mandarin.dst' },
+  { name: 'Maron', file: 'Maron.dst' },
+  { name: 'May Lily', file: 'May Lily.dst' },
+  { name: 'Metal Lord', file: 'Metal Lord.dst' },
+  { name: 'Midnight', file: 'Midnight.dst' },
+  { name: 'Monoment', file: 'Monoment.dst' },
+  { name: 'Mue', file: 'Mue.dst' },
+  { name: 'Neuropol Nova', file: 'Neuropol Nova.dst' },
+  { name: 'Old English', file: 'Old English.dst' },
+  { name: 'Oregano', file: 'Oregano.dst' },
+  { name: 'Pacifico', file: 'Pacifico.dst' },
+  { name: 'Recognize', file: 'Recognize.dst' },
+  { name: 'Remachine', file: 'Remachine.dst' },
+  { name: 'Sweet Mia', file: 'Sweet Mia.dst' },
 ];
-export const FONTS = STITCH_FONTS.map(f => ({ ...f, url: new URL('../data/fonts/' + f.file, import.meta.url).href }));
+export const FONTS = STITCH_FONTS.map(f => ({ ...f, url: new URL('../data/fonts/' + encodeURIComponent(f.file), import.meta.url).href }));
 const fontCache = {};
 export function loadStitchFont(name) {
   const f = FONTS.find(x => x.name === name) || FONTS[0];
