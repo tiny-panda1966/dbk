@@ -35,12 +35,19 @@ export function buildFont(buf, chars = DEFAULT_CHARS) {
     if (g && cx <= g.x1) { g.runs.push(r); g.x0 = Math.min(g.x0, x0); g.x1 = Math.max(g.x1, x1); }
     else glyphs.push({ runs: [r], x0, x1 });
   }
+  // A letter digitised in pieces (e.g. a crossbar stitched first) can start a separate "glyph"; merge pieces that mostly overlap.
+  for (let i = glyphs.length - 1; i > 0; i--) {
+    const p = glyphs[i - 1], g = glyphs[i], ov = Math.min(p.x1, g.x1) - Math.max(p.x0, g.x0);
+    if (ov > 0.5 * Math.min(p.x1 - p.x0, g.x1 - g.x0)) { p.runs.push(...g.runs); p.x0 = Math.min(p.x0, g.x0); p.x1 = Math.max(p.x1, g.x1); glyphs.splice(i, 1); }
+  }
   let minY = Infinity, maxY = -Infinity; for (const p of pts) { if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
   const capG = glyphs[chars.indexOf('H')] || glyphs[0];
   let capTop = -Infinity, base = Infinity; capG.runs.forEach(r => r.forEach(p => { if (p.y > capTop) capTop = p.y; if (p.y < base) base = p.y; }));
   const gaps = glyphs.slice(1).map((g, i) => g.x0 - glyphs[i].x1).filter(v => v > 0).sort((a, b) => a - b);
   const tracking = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 25;
-  const map = {}; glyphs.forEach((g, i) => { if (chars[i]) map[chars[i]] = g; });
+  // If the punctuation row doesn't match, keep letters and digits (first 62) and drop punctuation rather than mislabel it.
+  const usable = glyphs.length === chars.length ? chars.length : Math.min(glyphs.length, 62);
+  const map = {}; glyphs.slice(0, usable).forEach((g, i) => { map[chars[i]] = g; });
   return { map, ok: glyphs.length === chars.length, count: glyphs.length, expected: chars.length, minY, maxY, capHeight: capTop - base, tracking, stitches: pts.length };
 }
 
