@@ -636,9 +636,14 @@ export async function _debug() {
   const c = await getClient();
   if (!c) return { client: false };
   const res = await c.productsV3.queryProducts().limit(1).find();
-  await listProducts();
+  const list = await listProducts({ includeHidden: true });
+  const pid = CONFIG.embroidery?.productId || '';
+  const trace = { mode, listCount: list.length, configuredId: pid, inList: !!list.find(p => p.id === pid) };
+  try { const g = await c.productsV3.getProduct(pid); const raw = g?.product || g; trace.byId = raw ? { name: raw.name, slug: raw.slug, visible: raw.visible } : null; }
+  catch (e) { trace.byIdError = String(e?.message || e); }
+  if (trace.byId?.slug) { try { const p = await getProduct(trace.byId.slug); trace.bySlug = p ? { name: p.name, modifiers: p.modifiers.map(m => m.name + ' [' + m.type + ']'), variants: (p.variants || []).length } : null; } catch (e) { trace.bySlugError = String(e?.message || e); } }
   const emb = await getEmbroideryProduct().catch(e => ({ error: String(e) }));
   const fn = await fetch(CONFIG.embroidery?.designsEndpoint || '/api/embroidery').then(r => r.ok ? r.json() : { ok: false, status: r.status }).catch(e => ({ ok: false, error: String(e) }));
   const memberFn = await fetch('/api/member?action=ping').then(r => r.ok ? r.json() : { ok: false, status: r.status }).catch(e => ({ ok: false, error: String(e) }));
-  return { client: true, sdk: sdkStatus, cms: !!c.items, membersModule: !!c.members, loggedIn: !!c.auth.loggedIn?.(), uploadFunction: fn, memberFunction: memberFn, embroidery: emb && { name: emb.product?.name, id: emb.product?.id, kind: emb.kind, text: emb.text, logo: emb.logo, note: emb.note && { name: emb.note.name, key: emb.note.text?.key }, variants: emb.variants, error: emb.error }, sample: res.items[0] || null };
+  return { client: true, sdk: sdkStatus, cms: !!c.items, membersModule: !!c.members, loggedIn: !!c.auth.loggedIn?.(), uploadFunction: fn, memberFunction: memberFn, embroidery: emb && { name: emb.product?.name, id: emb.product?.id, kind: emb.kind, text: emb.text, logo: emb.logo, note: emb.note && { name: emb.note.name, key: emb.note.text?.key }, variants: emb.variants, error: emb.error }, embroideryTrace: trace, sample: res.items[0] || null };
 }
