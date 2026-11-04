@@ -362,6 +362,12 @@ img{display:block;max-width:100%}
 .faq[open] summary::after{content:'−'}
 .faq-a{padding:0 0 16px;font-size:16px;line-height:1.6}.faq-a p{margin:0 0 10px}
 .faq-a a,.faq-more a{text-decoration:underline}
+.faq-page .cats{flex-wrap:wrap;gap:8px;overflow:visible;border-bottom:0;margin-bottom:8px}
+.faq-page .cat{min-height:44px;padding:0 14px;border:1.5px solid var(--line);border-radius:2px;margin:0;white-space:normal;text-align:left}
+.faq-page .cat.on{border-color:var(--ink);background:var(--ink);color:#fff}
+.faq-page .cat.on span{color:#d6d4d0}
+.faq-page .cat:hover{border-color:var(--ink)}
+.faq-page .cat.on:hover{background:var(--ink)}
 .faq-more{margin:0;font-size:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
 /* cart drawer */

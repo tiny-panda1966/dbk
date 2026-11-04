@@ -13,7 +13,7 @@ export const CONFIG = {
   // Cloudflare function that returns the whole product list in one cached request ('' = query Wix directly)
   catalogEndpoint: '/api/catalog',
   // Products shown per "Load more" on the homepage
-  pageSize: 12,
+  pageSize: 24,
   // Footer social icons – shown only when a URL is set
   social: { facebook: '', instagram: '' },
   contact: {
