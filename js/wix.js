@@ -219,7 +219,7 @@ async function listAllProducts() {
     const cat = await loadFallback(), mods = fallbackModifiers(cat);
     items = cat.products.map(p => normFallback(p, mods)); mode = 'fallback';
   }
-  try { localStorage.setItem(LIST_CACHE_KEY, JSON.stringify({ at: Date.now(), mode, items: items.map(p => ({ ...p, modifiers: [], description: [], descHtml: '', info: [] })) })); } catch (e) {}
+  if (mode === 'live') try { localStorage.setItem(LIST_CACHE_KEY, JSON.stringify({ at: Date.now(), mode, items: items.map(p => ({ ...p, modifiers: [], description: [], descHtml: '', info: [] })) })); } catch (e) {}
   return items;
 }
 
@@ -477,11 +477,16 @@ export async function getThreads() {
 
 // The Wix product that charges for embroidery. Set CONFIG.embroidery.productSlug, or it's found by name.
 export async function getEmbroideryProduct() {
-  if (mode !== 'live') return null;
+  if (CONFIG.dataMode === 'fallback') return null;
   const items = await listProducts({ includeHidden: true });
   const { productId, productSlug } = CONFIG.embroidery || {};
-  const cand = (productId && items.find(p => p.id === productId)) || (productSlug && items.find(p => p.slug === productSlug))
-    || items.find(p => /embroider/i.test(p.name) && !/welding cap|beanie|skull|fabric|pattern/i.test(p.name));
+  let cand = (productId && items.find(p => p.id === productId)) || (productSlug && items.find(p => p.slug === productSlug));
+  // Hidden products may be missing from the listing: fetch the configured one straight from Wix by ID.
+  if (!cand && productId) {
+    try { const c = await getClient(); const res = c && await c.productsV3.getProduct(productId); const raw = res?.product || res; if (raw?.slug) cand = { slug: raw.slug }; }
+    catch (e) { console.warn('[DBK] Embroidery product lookup by ID failed:', e?.message || e); }
+  }
+  cand = cand || items.find(p => /embroider/i.test(p.name) && !/welding cap|beanie|skull|fabric|pattern/i.test(p.name));
   if (!cand) return null;
   const p = await getProduct(cand.slug); if (!p) return null;
   const note = p.modifiers.find(m => m.type === 'FREE_TEXT') || null;
