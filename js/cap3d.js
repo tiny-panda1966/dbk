@@ -196,10 +196,16 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
   const tagC = document.createElement('canvas'); tagC.width = 512; tagC.height = 320;
   const tagTex = new THREE.CanvasTexture(tagC); tagTex.colorSpace = THREE.SRGBColorSpace; tagTex.anisotropy = 8;
   const drawTag = img => {
-    const x = tagC.getContext('2d'); x.fillStyle = '#fbfbf9'; x.fillRect(0, 0, 512, 320);
-    for (let i = 0; i < 320; i += 3) { x.fillStyle = 'rgba(0,0,0,.025)'; x.fillRect(0, i, 512, 1); }
+    const x = tagC.getContext('2d'); x.fillStyle = '#ffffff'; x.fillRect(0, 0, 512, 320);
+    for (let i = 0; i < 320; i += 3) { x.fillStyle = 'rgba(0,0,0,.018)'; x.fillRect(0, i, 512, 1); }
     x.strokeStyle = 'rgba(0,0,0,.18)'; x.setLineDash([10, 7]); x.lineWidth = 3; x.strokeRect(14, 14, 484, 292);
-    if (img) { const k = Math.min(440 / img.width, 250 / img.height), w = img.width * k, h = img.height * k; x.drawImage(img, (512 - w) / 2, (320 - h) / 2, w, h); }
+    if (img) {
+      // Logo file has a grey background: knock out the light pixels so only the black lettering sits on the white label.
+      const k = Math.min(440 / img.width, 250 / img.height), w = Math.round(img.width * k), h = Math.round(img.height * k);
+      const t = document.createElement('canvas'); t.width = w; t.height = h; const tx = t.getContext('2d'); tx.drawImage(img, 0, 0, w, h);
+      try { const d = tx.getImageData(0, 0, w, h), a = d.data; for (let i = 0; i < a.length; i += 4) { const l = 0.299 * a[i] + 0.587 * a[i + 1] + 0.114 * a[i + 2]; const o = Math.max(0, Math.min(1, (170 - l) / 90)); a[i] = a[i + 1] = a[i + 2] = 20; a[i + 3] = Math.round(o * 255); } tx.putImageData(d, 0, 0); } catch (e) {}
+      x.drawImage(t, (512 - w) / 2, (320 - h) / 2);
+    }
     tagTex.needsUpdate = true;
   };
   drawTag(null);

@@ -31,6 +31,34 @@ const descLines = html => {
   const parts = (blocks.length ? blocks : [doc.body]).map(n => n.textContent.replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ').replace(/\s+/g, ' ').trim());
   return parts.filter(Boolean);
 };
+// Wix description HTML -> safe HTML kept as entered: paragraphs, line breaks, bold/italic/underline, lists, headings, links.
+const KEEP = { P: 'p', BR: 'br', STRONG: 'strong', B: 'strong', EM: 'em', I: 'em', U: 'u', UL: 'ul', OL: 'ol', LI: 'li', A: 'a', H1: 'h3', H2: 'h3', H3: 'h4', H4: 'h4', H5: 'h4', H6: 'h4', BLOCKQUOTE: 'blockquote' };
+const URL_RE = /\b(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/gi;
+const safeHref = h => { try { const u = new URL(h, location.href); return /^(https?:|mailto:|tel:)$/.test(u.protocol) ? u.href : ''; } catch (e) { return ''; } };
+const descHtml = html => {
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString(String(html), 'text/html');
+  const out = document.createElement('div');
+  const walk = (src, dst, inLink) => src.childNodes.forEach(n => {
+    if (n.nodeType === 3) {
+      const t = n.textContent.replace(/[\u200B-\u200D\uFEFF]/g, '');
+      if (inLink || !URL_RE.test(t)) { URL_RE.lastIndex = 0; dst.appendChild(document.createTextNode(t)); return; }
+      URL_RE.lastIndex = 0; let last = 0, m;
+      while ((m = URL_RE.exec(t))) { dst.appendChild(document.createTextNode(t.slice(last, m.index))); const a = document.createElement('a'); a.href = m[1]; a.target = '_blank'; a.rel = 'noopener'; a.textContent = m[1]; dst.appendChild(a); last = m.index + m[1].length; }
+      dst.appendChild(document.createTextNode(t.slice(last))); return;
+    }
+    if (n.nodeType !== 1 || /^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|svg)$/i.test(n.tagName)) return;
+    const tag = KEEP[n.tagName];
+    if (!tag) return walk(n, dst, inLink); // unwrap span/div/font etc.
+    const el = document.createElement(tag);
+    if (tag === 'a') { const h = safeHref(n.getAttribute('href') || ''); if (!h) return walk(n, dst, inLink); el.href = h; el.target = '_blank'; el.rel = 'noopener'; }
+    if (tag !== 'br') walk(n, el, inLink || tag === 'a');
+    dst.appendChild(el);
+  });
+  walk(doc.body, out, false);
+  out.querySelectorAll('p').forEach(p => { if (!p.textContent.trim() && !p.querySelector('br')) p.remove(); });
+  return out.textContent.trim() ? out.innerHTML : '';
+};
 const colourOf = name => { const w = (name || '').split(/\s+/)[0].replace(/^Grey$/i, 'Gray'); return COLOURS[w] ? w : 'Other'; };
 
 // wix:image://v1/<mediaId>/name.jpg#…  |  https://static.wixstatic.com/media/<mediaId>…  |  { image: … } | { url: … }
@@ -104,6 +132,7 @@ function normV3(p) {
     colour: colourOf(p.name), images: [...new Set(imgs)],
     cats: [...new Set([p.mainCategoryId, ...(p.allCategoriesInfo?.categories || []).map(x => x._id || x.id), ...(p.directCategoriesInfo?.categories || []).map(x => x._id || x.id)].filter(Boolean))],
     description: descLines(p.plainDescription || p.description),
+    descHtml: descHtml(p.plainDescription || (typeof p.description === 'string' ? p.description : '')),
     // Wix "Additional info sections" (e.g. Care, Sizing, Returns)
     info: (p.infoSections || []).map(s => ({ title: s.title || s.uniqueName || '', lines: descLines(s.plainDescription || s.description) })).filter(s => s.title && s.lines.length),
     modifiers: (p.modifiers || []).map(m => ({
@@ -190,7 +219,7 @@ async function listAllProducts() {
     const cat = await loadFallback(), mods = fallbackModifiers(cat);
     items = cat.products.map(p => normFallback(p, mods)); mode = 'fallback';
   }
-  try { localStorage.setItem(LIST_CACHE_KEY, JSON.stringify({ at: Date.now(), mode, items: items.map(p => ({ ...p, modifiers: [], description: [], info: [] })) })); } catch (e) {}
+  try { localStorage.setItem(LIST_CACHE_KEY, JSON.stringify({ at: Date.now(), mode, items: items.map(p => ({ ...p, modifiers: [], description: [], descHtml: '', info: [] })) })); } catch (e) {}
   return items;
 }
 

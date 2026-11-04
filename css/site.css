@@ -87,6 +87,13 @@ img{display:block;max-width:100%}
 .price{font-size:22px}
 .pdp-desc{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:16px;line-height:1.5}
 .pdp-desc p{margin:0}
+.pdp-desc p:empty,.pdp-desc p:has(> br:only-child){min-height:.75em}
+.pdp-desc a{color:var(--ink);text-decoration:underline;text-underline-offset:3px;font-weight:600;word-break:break-word}
+.pdp-desc a:hover{color:var(--muted)}
+.pdp-desc strong{color:var(--ink)}
+.pdp-desc ul,.pdp-desc ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:4px}
+.pdp-desc h3,.pdp-desc h4{margin:6px 0 0;color:var(--ink);font-size:17px;font-weight:700}
+.pdp-desc blockquote{margin:0;padding-left:12px;border-left:2px solid var(--line)}
 .step{display:flex;flex-direction:column;gap:14px}
 .step-head{display:flex;align-items:center;gap:12px;border-bottom:2px solid var(--ink);padding-bottom:10px}
 .step-head h2{margin:0;font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:26px;text-transform:uppercase}
