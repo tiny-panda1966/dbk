@@ -1,4 +1,14 @@
 /*
-  X-Robots-Tag: noindex, nofollow
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
+
+/admin*
+  X-Robots-Tag: noindex, nofollow
+/account*
+  X-Robots-Tag: noindex, nofollow
+/diagnostics*
+  X-Robots-Tag: noindex, nofollow
+/login-callback*
+  X-Robots-Tag: noindex, nofollow
+/thank-you*
+  X-Robots-Tag: noindex, nofollow

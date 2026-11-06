@@ -1,2 +1,7 @@
 User-agent: *
-Disallow: /
+Allow: /
+Disallow: /admin
+Disallow: /account
+Disallow: /diagnostics
+Disallow: /login-callback
+Disallow: /thank-you
