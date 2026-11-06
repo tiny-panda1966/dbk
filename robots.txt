@@ -5,3 +5,5 @@ Disallow: /account
 Disallow: /diagnostics
 Disallow: /login-callback
 Disallow: /thank-you
+
+Sitemap: https://dbk-weldingcaps.com/sitemap.xml
