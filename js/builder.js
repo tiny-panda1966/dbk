@@ -55,9 +55,14 @@ const STITCH_FONTS = [
 ];
 export const FONTS = STITCH_FONTS.map(f => ({ ...f, url: new URL('../data/fonts/' + encodeURIComponent(f.file), import.meta.url).href }));
 const fontCache = {};
+// Per-font corrections made in the DST font test bed (data/font-fixes.json): which character each stitched piece really is.
+let fixesP = null;
+const loadFixes = () => fixesP || (fixesP = fetch(new URL('../data/font-fixes.json', import.meta.url).href).then(r => r.ok ? r.json() : {}).catch(() => ({})));
 export function loadStitchFont(name) {
   const f = FONTS.find(x => x.name === name) || FONTS[0];
-  return fontCache[f.name] || (fontCache[f.name] = fetch(f.url).then(r => { if (!r.ok) throw new Error('font ' + r.status); return r.arrayBuffer(); }).then(buf => buildFont(buf)));
+  return fontCache[f.name] || (fontCache[f.name] = Promise.all([
+    fetch(f.url).then(r => { if (!r.ok) throw new Error('font ' + r.status); return r.arrayBuffer(); }), loadFixes(),
+  ]).then(([buf, fixes]) => buildFont(buf, undefined, fixes[f.name] || null)));
 }
 // Stitch thread colours offered on SOLID fabric caps (printed caps keep the standard stitch). The cap's own colour is left out.
 // A cap is solid when "Solid" is in its name.

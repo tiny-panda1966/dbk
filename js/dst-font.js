@@ -1,6 +1,7 @@
 // Reads a Tajima .dst lettering file exported from Embrilliance (one line of characters, in order)
 // and turns it into a stitched font: each glyph keeps its real stitch path. Units: 0.1 mm.
-export const DEFAULT_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,&-!?';
+// Kelly's Embrilliance export line ends with the punctuation .?!#$- (as stitched in Alphi Bold, Chickweed and others)
+export const DEFAULT_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.?!#$-';
 
 export function parseDST(buf) {
   const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
@@ -20,8 +21,8 @@ export function parseDST(buf) {
   return pts;
 }
 
-export function buildFont(buf, chars = DEFAULT_CHARS) {
-  const pts = parseDST(buf);
+// Splits the stitch stream into pieces (one per letter, when the file is clean). Returned in stitch order.
+export function pieces(pts) {
   const runs = []; let cur = null;
   for (const p of pts) {
     if (p.jump || !cur) { if (cur && cur.length > 1) runs.push(cur); cur = [p]; } else cur.push(p);
@@ -40,15 +41,57 @@ export function buildFont(buf, chars = DEFAULT_CHARS) {
     const p = glyphs[i - 1], g = glyphs[i], ov = Math.min(p.x1, g.x1) - Math.max(p.x0, g.x0);
     if (ov > 0.5 * Math.min(p.x1 - p.x0, g.x1 - g.x0)) { p.runs.push(...g.runs); p.x0 = Math.min(p.x0, g.x0); p.x1 = Math.max(p.x1, g.x1); glyphs.splice(i, 1); }
   }
+  return glyphs;
+}
+
+// Cut one piece into k letters at the emptiest vertical lines (where the stitches are thinnest).
+function splitPiece(g, k) {
+  if (k < 2) return [g];
+  const W = g.x1 - g.x0, B = 60, hist = new Array(B).fill(0);
+  g.runs.forEach(r => r.forEach(p => { hist[Math.min(B - 1, Math.floor(((p.x - g.x0) / (W || 1)) * B))]++; }));
+  const sm = hist.map((_, i) => (hist[i - 1] || 0) + 2 * hist[i] + (hist[i + 1] || 0));
+  const cuts = [];
+  for (let j = 1; j < k; j++) {
+    const c = Math.round((j / k) * B), lo = Math.max(2, c - Math.round(B / (2 * k))), hi = Math.min(B - 3, c + Math.round(B / (2 * k)));
+    let best = c, bv = Infinity; for (let i = lo; i <= hi; i++) if (sm[i] < bv) { bv = sm[i]; best = i; }
+    cuts.push(g.x0 + ((best + 0.5) / B) * W);
+  }
+  const part = x => { let i = 0; while (i < cuts.length && x > cuts[i]) i++; return i; };
+  const out = Array.from({ length: k }, () => ({ runs: [], x0: Infinity, x1: -Infinity }));
+  for (const r of g.runs) {
+    let seg = [r[0]], pi = part(r[0].x);
+    const push = () => { if (seg.length > 1) { const o = out[pi]; o.runs.push(seg); seg.forEach(p => { o.x0 = Math.min(o.x0, p.x); o.x1 = Math.max(o.x1, p.x); }); } };
+    for (let i = 1; i < r.length; i++) { const q = part(r[i].x); if (q !== pi) { push(); seg = [r[i - 1]]; pi = q; } seg.push(r[i]); }
+    push();
+  }
+  return out.filter(o => o.runs.length);
+}
+
+// fix (optional): { "<piece number, 1-based>": "<what that piece really is>" }
+//   "ij" → the piece holds two letters (split it)   "" → skip the piece   "+" → it belongs to the letter before
+//   Pieces without a fix carry on in DEFAULT_CHARS order after the last labelled one.
+export function buildFont(buf, chars = DEFAULT_CHARS, fix = null) {
+  const pts = parseDST(buf), raw = pieces(pts);
+  const map = {}, labels = []; let ptr = 0, last = null;
+  raw.forEach((g, i) => {
+    const f = fix && Object.prototype.hasOwnProperty.call(fix, String(i + 1)) ? String(fix[String(i + 1)]) : null;
+    if (f === '+') { if (last) { last.runs.push(...g.runs); last.x0 = Math.min(last.x0, g.x0); last.x1 = Math.max(last.x1, g.x1); } labels.push('+'); return; }
+    if (f === '' || f === '-') { labels.push(''); return; }
+    let lab;
+    if (f != null) { lab = [...f]; const at = chars.indexOf(lab[lab.length - 1], Math.max(0, ptr - 2)); ptr = at >= 0 ? at + 1 : ptr + lab.length; }
+    else { if (ptr >= chars.length) { labels.push('?'); return; } lab = [chars[ptr++]]; }
+    const parts = splitPiece(g, lab.length);
+    lab.forEach((ch, j) => { const p = parts[j] || parts[parts.length - 1]; if (p) { map[ch] = p; last = p; } });
+    labels.push(lab.join(''));
+  });
   let minY = Infinity, maxY = -Infinity; for (const p of pts) { if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
-  const capG = glyphs[chars.indexOf('H')] || glyphs[0];
+  const capG = map.H || Object.values(map)[0] || raw[0];
   let capTop = -Infinity, base = Infinity; capG.runs.forEach(r => r.forEach(p => { if (p.y > capTop) capTop = p.y; if (p.y < base) base = p.y; }));
-  const gaps = glyphs.slice(1).map((g, i) => g.x0 - glyphs[i].x1).filter(v => v > 0).sort((a, b) => a - b);
+  const gl = Object.values(map).sort((a, b) => a.x0 - b.x0);
+  const gaps = gl.slice(1).map((g, i) => g.x0 - gl[i].x1).filter(v => v > 0).sort((a, b) => a - b);
   const tracking = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 25;
-  // If the punctuation row doesn't match, keep letters and digits (first 62) and drop punctuation rather than mislabel it.
-  const usable = glyphs.length === chars.length ? chars.length : Math.min(glyphs.length, 62);
-  const map = {}; glyphs.slice(0, usable).forEach((g, i) => { map[chars[i]] = g; });
-  return { map, ok: glyphs.length === chars.length, count: glyphs.length, expected: chars.length, minY, maxY, capHeight: capTop - base, tracking, stitches: pts.length };
+  const missing = [...chars].filter(c => !map[c]);
+  return { map, labels, ok: !missing.length && ptr === chars.length, missing, count: raw.length, expected: chars.length, minY, maxY, capHeight: capTop - base, tracking, stitches: pts.length };
 }
 
 const hex = h => { h = h.replace('#', ''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
