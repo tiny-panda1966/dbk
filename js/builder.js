@@ -67,6 +67,8 @@ export function loadStitchFont(name) {
 // Stitch thread colours offered on SOLID fabric caps (printed caps keep the standard stitch). The cap's own colour is left out.
 // A cap is solid when "Solid" is in its name.
 export const isSolidCap = product => /\bsolid\b/i.test(product.name || '');
+// Two-tone caps: solid crown with a printed band, e.g. "Black Solid Red Bandana (Light) Band Welding Cap"
+export const isTwoTone = product => isSolidCap(product) && /\bband\b/i.test(product.name || '');
 const sameColour = (a, b) => a.split(' ')[0].toLowerCase() === (b || '').toLowerCase();
 const MAX_TEXT = 20;
 
@@ -186,10 +188,10 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
 
   function syncViewer() {
     if (!viewer) return;
-    const lk = [st.look, st.stitch, opt.fabric].join('|');
+    const lk = [st.look, st.stitch, opt.fabric, isTwoTone(product)].join('|');
     if (lk !== last.look) {
       last.look = lk;
-      viewer.setAppearance({ mode: st.look, fabric: opt.fabric, pattern: (product.images || []).map(m => `https://static.wixstatic.com/media/${m}/v1/fit/w_900,h_900,q_85/${m}`), seam: (solid ? (STITCHES.find(x => x[0] === st.stitch) || STITCHES[0])[1] : '#1d1d1f') })
+      viewer.setAppearance({ mode: st.look, fabric: opt.fabric, pattern: (product.images || []).map(m => `https://static.wixstatic.com/media/${m}/v1/fit/w_900,h_900,q_85/${m}`), seam: (solid ? (STITCHES.find(x => x[0] === st.stitch) || STITCHES[0])[1] : '#1d1d1f'), twoTone: isTwoTone(product) })
         .then(ok => { const f = st.look === 'print' && !ok; if (f !== st.printFailed) { st.printFailed = f; sync(); } });
     }
     if (opt.liner !== last.liner) { last.liner = opt.liner; viewer.setColors({ fabric: opt.fabric, liner: opt.liner }); }

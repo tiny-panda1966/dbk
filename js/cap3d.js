@@ -25,6 +25,18 @@ function weaveTexture() {
 function loadImg(url) {
   return new Promise(res => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = url; });
 }
+// Average colour of a small patch of a photo (fractions of width/height), ignoring near-white background.
+async function samplePhoto(url, fx = 0.5, fy = 0.3, size = 0.12) {
+  const img = await loadImg(url); if (!img) return null;
+  try {
+    const k = document.createElement('canvas'); k.width = k.height = 24; const x = k.getContext('2d');
+    const W = img.naturalWidth, H = img.naturalHeight;
+    x.drawImage(img, W * (fx - size / 2), H * (fy - size / 2), W * size, H * size, 0, 0, 24, 24);
+    const d = x.getImageData(0, 0, 24, 24).data; let rr = 0, gg = 0, bb = 0, n = 0;
+    for (let i = 0; i < d.length; i += 4) { if (d[i] > 235 && d[i + 1] > 235 && d[i + 2] > 235) continue; rr += d[i]; gg += d[i + 1]; bb += d[i + 2]; n++; }
+    return n ? new THREE.Color(rr / n / 255, gg / n / 255, bb / n / 255).convertSRGBToLinear() : null;
+  } catch (e) { return null; }
+}
 function whiteShare(img) {
   try {
     const k = document.createElement('canvas'); k.width = k.height = 48; const x = k.getContext('2d');
@@ -452,14 +464,27 @@ export function createCapViewer(el, { onPlace, onView } = {}, T) {
     setColors({ fabric: f, liner: l }) {
       if (l) { liner.color.set(l); flapIn.material.color.set(l); }
     },
-    // look: { mode: 'white'|'colour'|'print', fabric: hex, pattern: url, seam: hex }
-    async setAppearance({ mode, fabric: fx, pattern, seam }) {
+    // look: { mode: 'white'|'colour'|'print', fabric: hex, pattern: url, seam: hex, twoTone: bool }
+    // twoTone: solid crown and flaps with a printed band ("Black Solid … Band" caps). The crown colour is
+    // sampled from the main product photo; the print goes on the band only.
+    async setAppearance({ mode, fabric: fx, pattern, seam, twoTone }) {
       if (seam) { seamMat.color.set(seam); stitchMat.color.set(seam); crownStitch.color.set(seam); const lum = new THREE.Color(seam).getHSL({}).l; seamMat.opacity = stitchMat.opacity = crownStitch.opacity = lum > 0.6 ? 0.95 : 0.6; }
       const req = ++patReq;
       const apply = (tex, col) => fabricMeshes.forEach(([m, r]) => {
         if (tex) { const t = tex.clone(); t.needsUpdate = true; t.repeat.set(r[0], r[1]); m.map = t; } else m.map = weave;
         m.color.set(col); m.needsUpdate = true;
       });
+      if (mode === 'print' && pattern && twoTone) {
+        const main = Array.isArray(pattern) ? pattern[0] : pattern;
+        const [t, crown] = await Promise.all([patternTexture(pattern), samplePhoto(main, 0.5, 0.3)]); if (req !== patReq) return false;
+        const base = crown || new THREE.Color(fx || 0x1d1d1f);
+        fabricMeshes.forEach(([m, rep]) => {
+          if (m === bandMat && t) { const tt = t.clone(); tt.needsUpdate = true; tt.repeat.set(rep[0], rep[1]); m.map = tt; m.color.set(0xffffff); }
+          else { m.map = weave; m.color.copy(base); }
+          m.needsUpdate = true;
+        });
+        return !!t;
+      }
       if (mode === 'print' && pattern) {
         const t = await patternTexture(pattern); if (req !== patReq) return false;
         if (t) { apply(t, 0xffffff); return true; }
