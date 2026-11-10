@@ -120,7 +120,7 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
     <div class="emb-panel" data-emb-upload hidden>
       <label class="upload"><input type="file" accept="image/png,image/jpeg,image/svg+xml" data-file><span data-file-name>Choose a logo or image (PNG, JPG or SVG)</span></label>
       <p class="note copyright"><strong>Copyright reminder:</strong> only upload logos or images you own or have permission to use. DBK can’t stitch trademarked logos, team or brand artwork without the owner’s permission.</p>
-      <p class="note">Kelly prepares your artwork for stitching and emails a proof before your cap is made.</p>
+      <p class="note">DBK Welding Caps staff prepare your artwork for stitching and email a proof before your cap is made.</p>
     </div>
     <div class="emb-panel" data-emb-common hidden>
       <div class="field"><span><strong>Thread colour</strong> <span class="muted" data-thread-name></span></span>
@@ -131,7 +131,7 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
         <label class="field"><span><strong>Size</strong> <span class="mono" data-scale-v></span></span><input type="range" min="50" max="150" step="5" value="100" data-scale></label>
         <label class="field"><span><strong>Rotation</strong> <span class="mono" data-rot-v></span></span><input type="range" min="-45" max="45" step="1" value="0" data-rot></label>
       </div>
-      <p class="note">${photoOnly ? 'We save the photo you have selected with your order. Kelly places the embroidery to match and emails a proof before it’s made.' : 'Drag the embroidery on the 3D cap to place it anywhere on the crown, band or flaps, then lock the position.'}</p>
+      <p class="note">${photoOnly ? 'We save the photo you have selected with your order. DBK Welding Caps staff place the embroidery to match and email a proof before it’s made.' : 'Drag the embroidery on the 3D cap to place it anywhere on the crown, band or flaps, then lock the position.'}</p>
     </div>`;
 
   const W = s => wrap.querySelector(s), S = s => step.querySelector(s), SA = s => [...step.querySelectorAll(s)];
@@ -163,7 +163,7 @@ export function createBuilder({ wrap, step, stepNo, product, threads, prices, on
   function sync() {
     wrap.querySelectorAll('[data-stitch]').forEach(b => b.classList.toggle('on', b.dataset.stitch === st.stitch));
     const sn = W('[data-stitch-name]'); if (sn) sn.textContent = '· ' + st.stitch;
-    if (!photoOnly) W('[data-look-note]').textContent = st.look === 'print' ? (st.printFailed ? 'The print couldn’t be loaded, so the model shows the base colour.' : 'Print preview taken from the product photo. Kelly emails a stitch proof on your real fabric.') : st.look === 'colour' ? 'Showing the fabric’s base colour.' : 'Plain white cap, for placing embroidery clearly. Your liner colour shows inside.';
+    if (!photoOnly) W('[data-look-note]').textContent = st.look === 'print' ? (st.printFailed ? 'The print couldn’t be loaded, so the model shows the base colour.' : 'Print preview taken from the product photo. DBK Welding Caps staff email a stitch proof on your real fabric.') : st.look === 'colour' ? 'Showing the fabric’s base colour.' : 'Plain white cap, for placing embroidery clearly. Your liner colour shows inside.';
     const on = !!active();
     if (!photoOnly) {
       W('[data-place-row]').hidden = !on;

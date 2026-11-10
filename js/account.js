@@ -85,7 +85,7 @@ if (!member) {
       <div class="panel-head"><h2>Special instructions</h2></div>
       <div class="pad-s instr">
         <label class="field"><span><strong>In your own words</strong></span><textarea rows="3" maxlength="500" data-it placeholder="e.g. Can you move the seam to the back or other side please"></textarea></label>
-        ${prefs.instructions ? `<div class="confirm${ok ? ' ok' : ''}"><div class="confirm-head"><span class="kicker">Confirmed by DBK · applied to every order</span><span class="tag${ok ? ' ok' : ''}">${ok ? 'Confirmed' : 'Awaiting DBK'}</span></div><p>${ok ? esc(prefs.instructionsConfirmed) : 'Kelly will read your instructions and confirm the details with you.'}</p></div>` : ''}
+        ${prefs.instructions ? `<div class="confirm${ok ? ' ok' : ''}"><div class="confirm-head"><span class="kicker">Confirmed by DBK · applied to every order</span><span class="tag${ok ? ' ok' : ''}">${ok ? 'Confirmed' : 'Awaiting DBK'}</span></div><p>${ok ? esc(prefs.instructionsConfirmed) : 'DBK Welding Caps staff will read your instructions and confirm the details with you.'}</p></div>` : ''}
         <button type="button" class="btn-sm dark" data-isave>Save instructions</button>
       </div>`;
     const ta = iBox.querySelector('[data-it]'); ta.value = prefs.instructions || '';

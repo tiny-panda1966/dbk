@@ -135,11 +135,16 @@ function normV3(p) {
     descHtml: descHtml(p.plainDescription || (typeof p.description === 'string' ? p.description : '')),
     // Wix "Additional info sections" (e.g. Care, Sizing, Returns)
     info: (p.infoSections || []).map(s => ({ title: s.title || s.uniqueName || '', lines: descLines(s.plainDescription || s.description) })).filter(s => s.title && s.lines.length),
-    modifiers: (p.modifiers || []).map(m => ({
+    // Product options (Cap Size etc. when they create variants) are shown as steps too; isOption marks them so
+    // add-to-cart can pick the matching variant instead of the first one.
+    modifiers: [...(p.options || []).map(o => ({
+      key: o._id || o.key || o.name, name: o.name, type: o.optionRenderType || 'TEXT_CHOICES', mandatory: true, isOption: true, text: null,
+      choices: (o.choicesSettings?.choices || []).map(ch => ({ key: ch.choiceId || ch.key, name: ch.name, hex: ch.colorCode, add: 0 })),
+    })), ...(p.modifiers || []).filter(m => !(p.options || []).some(o => o.name === m.name)).map(m => ({
       key: m.key || m._id, name: m.name, type: m.modifierRenderType, mandatory: !!m.mandatory,
       choices: (m.choicesSettings?.choices || []).map(ch => ({ key: ch.key || ch.choiceId, name: ch.name, hex: ch.colorCode, add: Number(ch.addedPrice || 0) })),
       text: m.freeTextSettings ? { key: m.freeTextSettings.key || m.key, title: m.freeTextSettings.title || m.name, max: m.freeTextSettings.maxCharCount || 500, add: Number(m.freeTextSettings.defaultAddedPrice || 0) } : null,
-    })),
+    }))],
     variantId: p.variantsInfo?.variants?.[0]?._id || null, live: true,
   };
 }
@@ -324,12 +329,26 @@ async function rawCart() {
   return readLocal();
 }
 
+// Variant whose option choices match what the customer picked (e.g. Cap Size 7 3/8").
+async function variantFor(product, choices) {
+  const opts = (product.modifiers || []).filter(m => m.isOption);
+  if (!opts.length) return product.variantId;
+  const want = opts.map(m => ({ option: m.name, choice: m.choices.find(c => c.key === choices[m.key])?.name })).filter(x => x.choice);
+  const vs = await getVariants(product.id, product._raw);
+  const hit = vs.find(v => want.every(w => v.choices.some(c => c.option === w.option && c.choice === w.choice)))
+    || vs.find(v => want.every(w => v.choices.some(c => c.choice === w.choice)));
+  if (!hit) console.warn('[DBK] No variant matches', want);
+  return hit?.id || product.variantId;
+}
+
 export async function addToCart(product, { choices = {}, texts = {}, qty = 1, unit, summary = [] }) {
   const c = await getClient();
   if (c && product.live) {
     if (!c.currentCart) throw new Error('Cart is temporarily unavailable.');
-    const options = { options: choices };
-    if (product.variantId) options.variantId = product.variantId;
+    const mods = product.modifiers || [];
+    const modChoices = Object.fromEntries(Object.entries(choices).filter(([k]) => !mods.some(m => m.isOption && m.key === k)));
+    const options = { options: modChoices };
+    options.variantId = await variantFor(product, choices);
     const ct = Object.fromEntries(Object.entries(texts).filter(([, v]) => v && v.trim()));
     if (Object.keys(ct).length) options.customTextFields = ct;
     const before = new Map((await rawCart()).map(l => [l.id, l.qty]));

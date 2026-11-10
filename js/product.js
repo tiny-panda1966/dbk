@@ -87,7 +87,7 @@ root.innerHTML = `
       ${textMods.map(m => `
       <label class="field"><span><strong>${esc(m.name.replace(' (Please Specify)', ''))}</strong> <span class="muted">· optional</span></span>
         <textarea rows="2" maxlength="${m.text.max}" data-t="${esc(m.key)}" placeholder="${esc(m.text.title)}"></textarea></label>`).join('')}
-      <p class="step-err" data-note-err hidden>You chose a custom option. Tell Kelly the details in the notes above.</p>
+      <p class="step-err" data-note-err hidden>You chose a custom option. Tell DBK Welding Caps staff the details in the notes above.</p>
       <div class="buy">
         <div class="qty"><button type="button" data-qty="-1" aria-label="Decrease quantity">−</button><span data-qty-val>1</span><button type="button" data-qty="1" aria-label="Increase quantity">+</button></div>
         <button type="button" class="btn btn-yellow grow" data-add>Add to cart</button>
@@ -167,6 +167,8 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
     }
     const stitch = builder?.stitch?.() || '';
     if (stitch) { const tm = tagMod(); if (tm) capTexts[tm.key] = [capTexts[tm.key], `Stitch colour: ${stitch}`].filter(Boolean).join('\n').slice(0, tm.text.max); }
+    const capSpec = choiceMods.filter(m => chosen(m)).map(m => `${label(m)}: ${chosen(m).name}`).join(' | ');
+    if (capSpec) { const tm = tagMod(); if (tm) capTexts[tm.key] = [`Cap: ${capSpec}`, capTexts[tm.key]].filter(Boolean).join('\n').slice(0, tm.text.max); }
     const instr = instrForOrder();
     if (instr) { const tm = tagMod(); if (tm) capTexts[tm.key] = [capTexts[tm.key], instr.line].filter(Boolean).join('\n').slice(0, tm.text.max); }
     if (instr?.changed) savePrefs({ instructions: instr.text }).then(x => { prefs = x; renderInstr(); }).catch(() => {});
@@ -235,7 +237,7 @@ function renderConfirm() {
   const box = instrBox.querySelector('[data-confirm]'); if (!box) return;
   const t = currentInstr(), ok = isConfirmed(t);
   box.hidden = !t; box.className = 'confirm' + (ok ? ' ok' : '');
-  box.innerHTML = `<div class="confirm-head"><span class="kicker">Confirmed by DBK</span><span class="tag${ok ? ' ok' : ''}">${ok ? 'Confirmed' : 'Awaiting DBK'}</span></div><p>${ok ? esc(prefs.instructionsConfirmed) : 'Kelly will read your instructions and confirm the details with you before your cap is made.'}</p>`;
+  box.innerHTML = `<div class="confirm-head"><span class="kicker">Confirmed by DBK</span><span class="tag${ok ? ' ok' : ''}">${ok ? 'Confirmed' : 'Awaiting DBK'}</span></div><p>${ok ? esc(prefs.instructionsConfirmed) : 'DBK Welding Caps staff will read your instructions and confirm the details with you before your cap is made.'}</p>`;
 }
 function renderInstr() {
   if (!member) { instrBox.innerHTML = ''; return; }
