@@ -167,8 +167,6 @@ $$('[data-add]').forEach(b => b.onclick = async () => {
     }
     const stitch = builder?.stitch?.() || '';
     if (stitch) { const tm = tagMod(); if (tm) capTexts[tm.key] = [capTexts[tm.key], `Stitch colour: ${stitch}`].filter(Boolean).join('\n').slice(0, tm.text.max); }
-    const capSpec = choiceMods.filter(m => chosen(m)).map(m => `${label(m)}: ${chosen(m).name}`).join(' | ');
-    if (capSpec) { const tm = tagMod(); if (tm) capTexts[tm.key] = [`Cap: ${capSpec}`, capTexts[tm.key]].filter(Boolean).join('\n').slice(0, tm.text.max); }
     const instr = instrForOrder();
     if (instr) { const tm = tagMod(); if (tm) capTexts[tm.key] = [capTexts[tm.key], instr.line].filter(Boolean).join('\n').slice(0, tm.text.max); }
     if (instr?.changed) savePrefs({ instructions: instr.text }).then(x => { prefs = x; renderInstr(); }).catch(() => {});
